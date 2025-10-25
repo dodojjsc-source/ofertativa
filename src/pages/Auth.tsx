@@ -9,7 +9,7 @@ import { toast } from "@/hooks/use-toast";
 import { z } from "zod";
 
 const passwordSchema = z.string()
-  .min(12, "A senha deve ter no mínimo 12 caracteres")
+  .min(8, "A senha deve ter no mínimo 8 caracteres")
   .regex(/[A-Z]/, "A senha deve conter pelo menos uma letra maiúscula")
   .regex(/[a-z]/, "A senha deve conter pelo menos uma letra minúscula")
   .regex(/[0-9]/, "A senha deve conter pelo menos um número")
@@ -134,7 +134,7 @@ export default function Auth() {
               <Input
                 id="password"
                 type="password"
-                placeholder={isLogin ? "••••••••" : "Mínimo 12 caracteres, maiúscula, minúscula, número e especial"}
+                placeholder={isLogin ? "••••••••" : "Mínimo 8 caracteres, maiúscula, minúscula, número e especial"}
                 value={formData.password}
                 onChange={(e) =>
                   setFormData({ ...formData, password: e.target.value })
@@ -143,7 +143,7 @@ export default function Auth() {
               />
               {!isLogin && (
                 <p className="text-xs text-muted-foreground">
-                  Senha forte: min. 12 caracteres, maiúscula, minúscula, número e caractere especial
+                  Senha forte: min. 8 caracteres, maiúscula, minúscula, número e caractere especial
                 </p>
               )}
             </div>
