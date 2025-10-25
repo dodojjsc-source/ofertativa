@@ -35,21 +35,30 @@ const initialUsers: AppUser[] = [
 ];
 
 export function UsersProvider({ children }: { children: ReactNode }) {
-  const [users, setUsers] = useState<AppUser[]>(() => {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    const oldStored = localStorage.getItem("localStorage.users"); // Recuperar da chave antiga
-    
-    if (stored) {
-      return JSON.parse(stored);
-    } else if (oldStored) {
-      // Migrar da chave antiga para a nova
-      const oldUsers = JSON.parse(oldStored);
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(oldUsers));
-      localStorage.removeItem("localStorage.users");
-      return oldUsers;
+  // Recuperar usuários (tentar chave nova, depois antiga)
+  const getInitialUsers = (): AppUser[] => {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEY);
+      if (stored) {
+        return JSON.parse(stored);
+      }
+      
+      // Tentar recuperar da chave antiga
+      const oldStored = localStorage.getItem("localStorage.users");
+      if (oldStored) {
+        const oldUsers = JSON.parse(oldStored);
+        // Migrar para chave nova
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(oldUsers));
+        localStorage.removeItem("localStorage.users");
+        return oldUsers;
+      }
+    } catch (error) {
+      console.error("Erro ao carregar usuários:", error);
     }
     return initialUsers;
-  });
+  };
+
+  const [users, setUsers] = useState<AppUser[]>(getInitialUsers());
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(users));
