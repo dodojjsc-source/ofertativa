@@ -10,6 +10,7 @@ export interface AppUser {
   role: UserRole;
   gestorId?: string;
   status: "ativo" | "inativo";
+  metaDiaria?: number; // Meta de ligações diárias (default: 60)
 }
 
 interface UsersContextType {
@@ -36,7 +37,18 @@ const initialUsers: AppUser[] = [
 export function UsersProvider({ children }: { children: ReactNode }) {
   const [users, setUsers] = useState<AppUser[]>(() => {
     const stored = localStorage.getItem(STORAGE_KEY);
-    return stored ? JSON.parse(stored) : initialUsers;
+    const oldStored = localStorage.getItem("localStorage.users"); // Recuperar da chave antiga
+    
+    if (stored) {
+      return JSON.parse(stored);
+    } else if (oldStored) {
+      // Migrar da chave antiga para a nova
+      const oldUsers = JSON.parse(oldStored);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(oldUsers));
+      localStorage.removeItem("localStorage.users");
+      return oldUsers;
+    }
+    return initialUsers;
   });
 
   useEffect(() => {
@@ -92,7 +104,7 @@ export function UsersProvider({ children }: { children: ReactNode }) {
     }
 
     // Verificar se tem lote em aberto (leads pendentes)
-    const leadsData = localStorage.getItem("localStorage.leads");
+    const leadsData = localStorage.getItem("leads");
     if (leadsData) {
       const leads = JSON.parse(leadsData);
       const hasOpenLote = leads.some(

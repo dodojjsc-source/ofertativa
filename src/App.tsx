@@ -12,6 +12,8 @@ import { AssignmentsProvider } from "@/contexts/AssignmentsContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
+import Producao from "./pages/Producao";
+import CorretorDetail from "./pages/CorretorDetail";
 import Upload from "./pages/Upload";
 import Atendimento from "./pages/Atendimento";
 import Historico from "./pages/Historico";
@@ -41,6 +43,22 @@ const App = () => (
                         element={
                           <ProtectedRoute>
                             <Dashboard />
+                          </ProtectedRoute>
+                        }
+                      />
+                      <Route
+                        path="/producao"
+                        element={
+                          <ProtectedRoute allowedRoles={["admin", "gestor"]}>
+                            <Producao />
+                          </ProtectedRoute>
+                        }
+                      />
+                      <Route
+                        path="/producao/corretor/:id"
+                        element={
+                          <ProtectedRoute allowedRoles={["admin", "gestor"]}>
+                            <CorretorDetail />
                           </ProtectedRoute>
                         }
                       />

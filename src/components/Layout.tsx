@@ -10,6 +10,7 @@ import {
   Users, 
   FolderOpen,
   Send,
+  BarChart3,
   LogOut 
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -26,6 +27,7 @@ export function Layout({ children }: { children: ReactNode }) {
 
   const navItems = [
     { path: "/dashboard", label: "Dashboard", icon: LayoutDashboard, roles: ["admin", "gestor", "corretor"] },
+    { path: "/producao", label: "Produção", icon: BarChart3, roles: ["admin", "gestor"] },
     { path: "/upload", label: "Upload", icon: Upload, roles: ["admin", "gestor"] },
     { path: "/atendimento", label: "Atendimento", icon: Phone, roles: ["corretor"] },
     { path: "/historico", label: "Histórico", icon: History, roles: ["admin", "gestor", "corretor"] },

@@ -159,12 +159,13 @@ export default function Upload() {
 
     addAssignments(newAssignments);
 
-    // Atualizar os leads com o corretorId
+    // Atualizar os leads com o corretorId e gestorId correto
     console.log("📦 Atualizando leads com corretorId...");
     newAssignments.forEach((assignment) => {
+      const corretor = corretoresElegiveis.find(c => c.id === assignment.corretorId);
       updateLead(assignment.leadId, { 
         corretorId: assignment.corretorId,
-        gestorId: user?.id || ""
+        gestorId: corretor?.gestorId || user?.id || ""
       });
     });
     console.log(`✅ ${newAssignments.length} leads atualizados com sucesso`);
