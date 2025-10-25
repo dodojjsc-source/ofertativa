@@ -8,6 +8,7 @@ import { UsersProvider } from "@/contexts/UsersContext";
 import { LeadsProvider } from "@/contexts/LeadsContext";
 import { FiltersProvider } from "@/contexts/FiltersContext";
 import { BitrixQueueProvider } from "@/contexts/BitrixQueueContext";
+import { AssignmentsProvider } from "@/contexts/AssignmentsContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
@@ -26,76 +27,78 @@ const App = () => (
     <UsersProvider>
       <AuthProvider>
         <LeadsProvider>
-          <BitrixQueueProvider>
-            <FiltersProvider>
-              <TooltipProvider>
-                <Toaster />
-                <Sonner />
-                <BrowserRouter>
-                  <Routes>
-                    <Route path="/" element={<Login />} />
-                    <Route
-                      path="/dashboard"
-                      element={
-                        <ProtectedRoute>
-                          <Dashboard />
-                        </ProtectedRoute>
-                      }
-                    />
-                    <Route
-                      path="/upload"
-                      element={
-                        <ProtectedRoute allowedRoles={["admin", "gestor"]}>
-                          <Upload />
-                        </ProtectedRoute>
-                      }
-                    />
-                    <Route
-                      path="/atendimento"
-                      element={
-                        <ProtectedRoute allowedRoles={["corretor"]}>
-                          <Atendimento />
-                        </ProtectedRoute>
-                      }
-                    />
-                    <Route
-                      path="/historico"
-                      element={
-                        <ProtectedRoute>
-                          <Historico />
-                        </ProtectedRoute>
-                      }
-                    />
-                    <Route
-                      path="/fila-bitrix"
-                      element={
-                        <ProtectedRoute allowedRoles={["admin", "gestor"]}>
-                          <FilaBitrix />
-                        </ProtectedRoute>
-                      }
-                    />
-                    <Route
-                      path="/usuarios"
-                      element={
-                        <ProtectedRoute allowedRoles={["admin"]}>
-                          <Usuarios />
-                        </ProtectedRoute>
-                      }
-                    />
-                    <Route
-                      path="/campanhas"
-                      element={
-                        <ProtectedRoute allowedRoles={["admin"]}>
-                          <Campanhas />
-                        </ProtectedRoute>
-                      }
-                    />
-                    <Route path="*" element={<NotFound />} />
-                  </Routes>
-                </BrowserRouter>
-              </TooltipProvider>
-            </FiltersProvider>
-          </BitrixQueueProvider>
+          <AssignmentsProvider>
+            <BitrixQueueProvider>
+              <FiltersProvider>
+                <TooltipProvider>
+                  <Toaster />
+                  <Sonner />
+                  <BrowserRouter>
+                    <Routes>
+                      <Route path="/" element={<Login />} />
+                      <Route
+                        path="/dashboard"
+                        element={
+                          <ProtectedRoute>
+                            <Dashboard />
+                          </ProtectedRoute>
+                        }
+                      />
+                      <Route
+                        path="/upload"
+                        element={
+                          <ProtectedRoute allowedRoles={["admin", "gestor"]}>
+                            <Upload />
+                          </ProtectedRoute>
+                        }
+                      />
+                      <Route
+                        path="/atendimento"
+                        element={
+                          <ProtectedRoute allowedRoles={["corretor"]}>
+                            <Atendimento />
+                          </ProtectedRoute>
+                        }
+                      />
+                      <Route
+                        path="/historico"
+                        element={
+                          <ProtectedRoute>
+                            <Historico />
+                          </ProtectedRoute>
+                        }
+                      />
+                      <Route
+                        path="/fila-bitrix"
+                        element={
+                          <ProtectedRoute allowedRoles={["admin", "gestor"]}>
+                            <FilaBitrix />
+                          </ProtectedRoute>
+                        }
+                      />
+                      <Route
+                        path="/usuarios"
+                        element={
+                          <ProtectedRoute allowedRoles={["admin"]}>
+                            <Usuarios />
+                          </ProtectedRoute>
+                        }
+                      />
+                      <Route
+                        path="/campanhas"
+                        element={
+                          <ProtectedRoute allowedRoles={["admin"]}>
+                            <Campanhas />
+                          </ProtectedRoute>
+                        }
+                      />
+                      <Route path="*" element={<NotFound />} />
+                    </Routes>
+                  </BrowserRouter>
+                </TooltipProvider>
+              </FiltersProvider>
+            </BitrixQueueProvider>
+          </AssignmentsProvider>
         </LeadsProvider>
       </AuthProvider>
     </UsersProvider>
