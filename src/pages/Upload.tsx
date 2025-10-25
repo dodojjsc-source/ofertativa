@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Layout } from "@/components/Layout";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLeads } from "@/contexts/LeadsContext";
@@ -24,29 +24,38 @@ export default function Upload() {
   const [selectedCorretores, setSelectedCorretores] = useState<string[]>([]);
   const [corretoresElegiveis, setCorretoresElegiveis] = useState<AppUser[]>([]);
 
-  const loadCorretoresElegiveis = () => {
-    // Sempre buscar do localStorage sem cache
-    const storedUsers = localStorage.getItem("users");
-    const allUsers: AppUser[] = storedUsers ? JSON.parse(storedUsers) : [];
+  const loadCorretoresElegiveis = useCallback(() => {
+    console.log("🔄 Carregando corretores elegíveis...");
+    console.log("👤 User atual:", user);
+    console.log("📊 Total de usuários no contexto:", users.length);
 
-    const eligible = allUsers.filter((u) => {
-      if (u.role !== "corretor" || u.status !== "ativo") return false;
-      
-      // Admin vê todos os corretores ativos
-      if (user?.role === "admin") return true;
-      
-      // Gestor vê apenas seus corretores
-      if (user?.role === "gestor") return u.gestorId === user.id;
-      
-      return false;
-    });
+    if (!user) {
+      console.log("⚠️ Nenhum usuário logado");
+      setCorretoresElegiveis([]);
+      return;
+    }
 
+    let eligible: AppUser[] = [];
+    if (user.role === "admin") {
+      eligible = users.filter(u => u.role === "corretor" && u.status === "ativo");
+      console.log("👑 Admin: vendo todos os corretores ativos");
+    } else if (user.role === "gestor") {
+      eligible = users.filter(u => 
+        u.role === "corretor" && 
+        u.status === "ativo" && 
+        u.gestorId === user.id
+      );
+      console.log(`👔 Gestor: vendo corretores vinculados ao ID ${user.id}`);
+    }
+
+    console.log("✅ Corretores elegíveis encontrados:", eligible.length);
+    console.log("📋 Lista:", eligible);
     setCorretoresElegiveis(eligible);
-  };
+  }, [user, users]);
 
   useEffect(() => {
     loadCorretoresElegiveis();
-  }, [user]);
+  }, [loadCorretoresElegiveis]);
 
   const toggleCorretor = (corretorId: string) => {
     setSelectedCorretores((prev) =>

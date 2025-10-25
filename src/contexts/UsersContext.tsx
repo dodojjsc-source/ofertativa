@@ -25,7 +25,7 @@ interface UsersContextType {
 
 const UsersContext = createContext<UsersContextType | undefined>(undefined);
 
-const STORAGE_KEY = "localStorage.users";
+const STORAGE_KEY = "users";
 
 const initialUsers: AppUser[] = [
   { id: "1", name: "Admin Master", email: "admin@sistema.com", role: "admin", status: "ativo" },
