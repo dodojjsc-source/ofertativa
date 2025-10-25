@@ -16,7 +16,7 @@ import { toast } from "@/hooks/use-toast";
 
 export default function Atendimento() {
   const { user } = useAuth();
-  const { getLeadsByCorretor, updateLead } = useLeads();
+  const { leads, updateLead } = useLeads();
   const { addToQueue } = useBitrixQueue();
   const { users } = useUsers();
   const [currentLead, setCurrentLead] = useState<any>(null);
@@ -29,14 +29,26 @@ export default function Atendimento() {
     loadNextLead();
   }, []);
 
+  useEffect(() => {
+    if (!user) return;
+    if (showFeedbackModal) return; // não troca enquanto o modal está aberto
+    loadNextLead();
+  }, [leads, user?.id, showFeedbackModal]);
   const loadNextLead = (skipId?: string) => {
-    if (user) {
-      const leads = getLeadsByCorretor(user.id);
-      console.log(`📋 Leads do corretor ${user.name} (ID: ${user.id}):`, leads.length);
-      console.log("📊 Leads pendentes:", leads.filter(l => l.status === "pendente").length);
-      const nextLead = leads.find((l) => l.status === "pendente" && l.id !== skipId);
-      setCurrentLead(nextLead || null);
+    if (!user) return;
+    const pending = leads.filter((l) => l.corretorId === user.id && l.status === "pendente");
+    console.log(`📋 Leads do corretor ${user.name} (ID: ${user.id}):`, pending.length);
+    console.log("📊 Leads pendentes:", pending.length);
+
+    if (!skipId && currentLead && pending.some((l) => l.id === currentLead.id)) {
+      // Mantém o lead atual se ainda for válido
+      setCurrentLead(currentLead);
+      return;
     }
+
+    const avoidId = skipId || currentLead?.id;
+    const next = pending.find((l) => l.id !== avoidId);
+    setCurrentLead(next || null);
   };
 
   const handleAtendeu = () => {
