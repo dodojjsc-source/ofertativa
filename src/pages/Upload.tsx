@@ -16,7 +16,7 @@ import { toast } from "@/hooks/use-toast";
 import { z } from "zod";
 
 const leadSchema = z.object({
-  nome: z.string().trim().min(2, "Nome deve ter no mínimo 2 caracteres").max(100, "Nome muito longo"),
+  nome: z.string().trim().nonempty("Nome não pode estar vazio").max(100, "Nome muito longo"),
   telefone: z.string().trim().regex(/^\+?[\d\s()-]{10,15}$/, "Telefone inválido"),
   email: z.string().trim().email("Email inválido").max(255, "Email muito longo").optional().or(z.literal("")),
 });
