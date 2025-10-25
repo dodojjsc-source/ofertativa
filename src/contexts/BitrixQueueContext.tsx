@@ -51,23 +51,28 @@ export function BitrixQueueProvider({ children }: { children: ReactNode }) {
     try {
       const { data, error } = await supabase
         .from("bitrix_queue")
-        .select("*")
+        .select(`
+          *,
+          corretor:profiles!bitrix_queue_corretor_id_fkey(name),
+          gestor:profiles!bitrix_queue_gestor_id_fkey(name),
+          campanha:campanhas(nome)
+        `)
         .order("timestamp_criacao", { ascending: false });
 
       if (error) throw error;
 
-      const mappedQueue: BitrixQueueItem[] = (data || []).map((item) => ({
+      const mappedQueue: BitrixQueueItem[] = (data || []).map((item: any) => ({
         id: item.id,
         leadId: item.lead_id,
         campanhaId: item.campanha_id || "",
-        campanhaNome: "",
+        campanhaNome: item.campanha?.nome || "",
         nome: item.nome,
         telefone: item.telefone,
         email: undefined,
         corretorId: item.corretor_id || "",
-        corretorNome: "",
+        corretorNome: item.corretor?.name || "",
         gestorId: item.gestor_id || "",
-        gestorNome: "",
+        gestorNome: item.gestor?.name || "",
         feedback: item.feedback || "",
         observacao: item.observacao || "",
         statusFila: item.status_fila as BitrixQueueStatus,
@@ -176,10 +181,20 @@ export function BitrixQueueProvider({ children }: { children: ReactNode }) {
   const exportPendingCSV = (items: BitrixQueueItem[]) => {
     const pendingItems = items.filter((item) => item.statusFila === "pendente");
     
+    if (pendingItems.length === 0) {
+      toast({
+        title: "Aviso",
+        description: "Não há itens pendentes para exportar",
+        variant: "destructive",
+      });
+      return;
+    }
+
     const headers = [
       "queueId",
       "leadId",
       "campanhaId",
+      "campanha",
       "nome",
       "telefone",
       "corretor",
@@ -190,21 +205,24 @@ export function BitrixQueueProvider({ children }: { children: ReactNode }) {
     ];
 
     const rows = pendingItems.map((item) => [
-      item.id,
-      item.leadId,
-      item.campanhaId,
-      item.nome,
-      item.telefone,
-      item.corretorNome,
-      item.gestorNome,
-      item.feedback,
-      item.observacao,
-      item.timestampCriacao,
+      item.id || "",
+      item.leadId || "",
+      item.campanhaId || "",
+      item.campanhaNome || "",
+      item.nome || "",
+      item.telefone || "",
+      item.corretorNome || "",
+      item.gestorNome || "",
+      item.feedback || "",
+      item.observacao || "",
+      item.timestampCriacao || "",
     ]);
 
-    const csvContent = [
+    // Add UTF-8 BOM for proper encoding
+    const BOM = "\uFEFF";
+    const csvContent = BOM + [
       headers.join(","),
-      ...rows.map((row) => row.map((cell) => `"${cell}"`).join(",")),
+      ...rows.map((row) => row.map((cell) => `"${cell.replace(/"/g, '""')}"`).join(",")),
     ].join("\n");
 
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
@@ -216,6 +234,11 @@ export function BitrixQueueProvider({ children }: { children: ReactNode }) {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+
+    toast({
+      title: "Sucesso",
+      description: `${pendingItems.length} item(ns) exportado(s)`,
+    });
   };
 
   return (
