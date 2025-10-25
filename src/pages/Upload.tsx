@@ -15,7 +15,7 @@ import { toast } from "@/hooks/use-toast";
 
 export default function Upload() {
   const { user } = useAuth();
-  const { leads, addLeads } = useLeads();
+  const { leads, addLeads, updateLead } = useLeads();
   const { users } = useUsers();
   const { addAssignments, getPendingCountByCorretor, getAssignmentsByCampanha, isLeadAssigned, undoLastDistribution } = useAssignments();
   
@@ -158,6 +158,16 @@ export default function Upload() {
     }
 
     addAssignments(newAssignments);
+
+    // Atualizar os leads com o corretorId
+    console.log("📦 Atualizando leads com corretorId...");
+    newAssignments.forEach((assignment) => {
+      updateLead(assignment.leadId, { 
+        corretorId: assignment.corretorId,
+        gestorId: user?.id || ""
+      });
+    });
+    console.log(`✅ ${newAssignments.length} leads atualizados com sucesso`);
 
     // 4. Resumo
     const resumo = selectedCorretores.map((corretorId) => {

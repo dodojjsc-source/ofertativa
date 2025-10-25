@@ -66,7 +66,7 @@ const mockLeads: Lead[] = [
   },
 ];
 
-const STORAGE_KEY = "localStorage.leads";
+const STORAGE_KEY = "leads";
 
 export function LeadsProvider({ children }: { children: ReactNode }) {
   const [leads, setLeads] = useState<Lead[]>(() => {

@@ -42,7 +42,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [user]);
 
   const login = (userId: string): boolean => {
-    const usersData = localStorage.getItem("localStorage.users");
+    const usersData = localStorage.getItem("users");
     if (!usersData) return false;
 
     const users = JSON.parse(usersData);

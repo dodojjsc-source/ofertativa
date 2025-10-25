@@ -32,6 +32,8 @@ export default function Atendimento() {
   const loadNextLead = () => {
     if (user) {
       const leads = getLeadsByCorretor(user.id);
+      console.log(`📋 Leads do corretor ${user.name} (ID: ${user.id}):`, leads.length);
+      console.log("📊 Leads pendentes:", leads.filter(l => l.status === "pendente").length);
       const nextLead = leads.find((l) => l.status === "pendente");
       setCurrentLead(nextLead || null);
     }
