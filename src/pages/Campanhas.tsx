@@ -7,11 +7,19 @@ import { Plus, PackageOpen } from "lucide-react";
 import { useCampanhas } from "@/contexts/CampanhasContext";
 import { useLeads } from "@/contexts/LeadsContext";
 import { useNavigate } from "react-router-dom";
+import { useState } from "react";
+import { DistribuirLoteDialog } from "@/components/campanhas/DistribuirLoteDialog";
 
 export default function Campanhas() {
   const { campanhas, loading } = useCampanhas();
   const { leads } = useLeads();
   const navigate = useNavigate();
+  const [modalAberto, setModalAberto] = useState(false);
+  const [campanhaParaDistribuir, setCampanhaParaDistribuir] = useState<{
+    id: string;
+    nome: string;
+    disponiveis: number;
+  } | null>(null);
 
   const getCampanhaStats = (campanhaId: string) => {
     const campanhaLeads = leads.filter(l => l.campanhaId === campanhaId);
@@ -21,6 +29,17 @@ export default function Campanhas() {
     const progresso = totalLeads > 0 ? ((atendidos / totalLeads) * 100).toFixed(0) : "0";
     
     return { totalLeads, atendidos, disponiveis, progresso };
+  };
+
+  const abrirModalDistribuicao = (campanha: any, stats: ReturnType<typeof getCampanhaStats>) => {
+    if (stats.disponiveis === 0) return;
+    
+    setCampanhaParaDistribuir({
+      id: campanha.id,
+      nome: campanha.nome,
+      disponiveis: stats.disponiveis
+    });
+    setModalAberto(true);
   };
 
   return (
@@ -103,6 +122,7 @@ export default function Campanhas() {
                             variant="ghost" 
                             size="sm"
                             disabled={stats.disponiveis === 0}
+                            onClick={() => abrirModalDistribuicao(campanha, stats)}
                           >
                             Distribuir Lote
                           </Button>
@@ -115,6 +135,19 @@ export default function Campanhas() {
             </Table>
           </CardContent>
         </Card>
+
+        {campanhaParaDistribuir && (
+          <DistribuirLoteDialog
+            campanhaId={campanhaParaDistribuir.id}
+            campanhaName={campanhaParaDistribuir.nome}
+            leadsDisponiveis={campanhaParaDistribuir.disponiveis}
+            open={modalAberto}
+            onOpenChange={(open) => {
+              setModalAberto(open);
+              if (!open) setCampanhaParaDistribuir(null);
+            }}
+          />
+        )}
       </div>
     </Layout>
   );
