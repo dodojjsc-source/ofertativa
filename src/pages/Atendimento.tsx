@@ -63,7 +63,7 @@ export default function Atendimento() {
       if (novasTentativas >= 3) {
         // 3ª tentativa ou mais: liberar lead para redistribuição
         await updateLead(currentLead.id, {
-          status: "nao_atendido",
+          status: "pendente", // Mantém como pendente para aparecer como disponível
           corretorId: null, // Remove o corretor (volta para pool)
           tentativasContato: 0, // Reseta contador
           dataAtendimento: new Date().toISOString(),
@@ -232,6 +232,9 @@ export default function Atendimento() {
               <Button onClick={handleNaoAtendeu} variant="outline" className="flex-1" size="lg">
                 <PhoneOff className="mr-2 h-5 w-5" />
                 Não Atendeu
+              </Button>
+              <Button onClick={() => loadNextLead(currentLead?.id)} variant="secondary" className="flex-1" size="lg">
+                Atender próximo Lead
               </Button>
             </div>
           </CardContent>
