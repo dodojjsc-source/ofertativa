@@ -43,19 +43,28 @@ export function UsersProvider({ children }: { children: ReactNode }) {
 
   const loadUsers = async () => {
     try {
-      const { data, error } = await supabase
+      const { data: profiles, error: profileError } = await supabase
         .from("profiles")
         .select("*")
         .order("name");
 
-      if (error) throw error;
+      if (profileError) throw profileError;
 
-      const mappedUsers: AppUser[] = (data || []).map((profile) => ({
+      // Buscar roles de todos os usuários
+      const { data: roles, error: rolesError } = await supabase
+        .from("user_roles")
+        .select("user_id, role");
+
+      if (rolesError) throw rolesError;
+
+      const rolesMap = new Map(roles.map(r => [r.user_id, r.role]));
+
+      const mappedUsers: AppUser[] = (profiles || []).map((profile) => ({
         id: profile.id,
         name: profile.name,
         email: profile.email,
         telefone: profile.telefone || undefined,
-        role: profile.role as UserRole,
+        role: rolesMap.get(profile.id) as UserRole || "corretor",
         gestorId: profile.gestor_id || undefined,
         status: profile.status as "ativo" | "inativo",
         metaDiaria: profile.meta_diaria || 60,
@@ -90,17 +99,27 @@ export function UsersProvider({ children }: { children: ReactNode }) {
       if (updates.name !== undefined) dbUpdates.name = updates.name;
       if (updates.email !== undefined) dbUpdates.email = updates.email;
       if (updates.telefone !== undefined) dbUpdates.telefone = updates.telefone;
-      if (updates.role !== undefined) dbUpdates.role = updates.role;
       if (updates.gestorId !== undefined) dbUpdates.gestor_id = updates.gestorId;
       if (updates.status !== undefined) dbUpdates.status = updates.status;
       if (updates.metaDiaria !== undefined) dbUpdates.meta_diaria = updates.metaDiaria;
 
-      const { error } = await supabase
+      // Atualizar perfil
+      const { error: profileError } = await supabase
         .from("profiles")
         .update(dbUpdates)
         .eq("id", id);
 
-      if (error) throw error;
+      if (profileError) throw profileError;
+
+      // Atualizar role se fornecido
+      if (updates.role !== undefined) {
+        const { error: roleError } = await supabase
+          .from("user_roles")
+          .update({ role: updates.role })
+          .eq("user_id", id);
+
+        if (roleError) throw roleError;
+      }
 
       await loadUsers();
       toast({

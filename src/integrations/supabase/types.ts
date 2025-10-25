@@ -273,7 +273,6 @@ export type Database = {
           id: string
           meta_diaria: number | null
           name: string
-          role: Database["public"]["Enums"]["app_role"]
           status: Database["public"]["Enums"]["user_status"]
           telefone: string | null
           updated_at: string
@@ -285,7 +284,6 @@ export type Database = {
           id: string
           meta_diaria?: number | null
           name: string
-          role?: Database["public"]["Enums"]["app_role"]
           status?: Database["public"]["Enums"]["user_status"]
           telefone?: string | null
           updated_at?: string
@@ -297,7 +295,6 @@ export type Database = {
           id?: string
           meta_diaria?: number | null
           name?: string
-          role?: Database["public"]["Enums"]["app_role"]
           status?: Database["public"]["Enums"]["user_status"]
           telefone?: string | null
           updated_at?: string
@@ -311,6 +308,30 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      user_roles: {
+        Row: {
+          assigned_at: string | null
+          assigned_by: string | null
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          assigned_at?: string | null
+          assigned_by?: string | null
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          assigned_at?: string | null
+          assigned_by?: string | null
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
       }
     }
     Views: {

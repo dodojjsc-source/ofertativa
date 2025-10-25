@@ -5,9 +5,16 @@ import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { useUsers, AppUser } from "@/contexts/UsersContext";
 import { UserDialog } from "@/components/UserDialog";
-import { Plus, Pencil, Trash2, Search } from "lucide-react";
+import { InvitationDialog } from "@/components/InvitationDialog";
+import { Plus, Pencil, Trash2, Search, Mail, ChevronDown } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import {
   AlertDialog,
@@ -24,6 +31,7 @@ export default function Usuarios() {
   const { users, deleteUser, getUserById, getCorretoresByGestor, canDeleteUser } = useUsers();
   const [search, setSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [inviteDialogOpen, setInviteDialogOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<AppUser | undefined>();
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [userToDelete, setUserToDelete] = useState<string | null>(null);
@@ -105,10 +113,25 @@ export default function Usuarios() {
             <h1 className="text-3xl font-bold">Usuários</h1>
             <p className="text-muted-foreground">Gerenciar acesso ao sistema</p>
           </div>
-          <Button onClick={() => setDialogOpen(true)}>
-            <Plus className="mr-2 h-4 w-4" />
-            Novo Usuário
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button>
+                <Plus className="mr-2 h-4 w-4" />
+                Novo Usuário
+                <ChevronDown className="ml-2 h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => setInviteDialogOpen(true)}>
+                <Mail className="mr-2 h-4 w-4" />
+                Enviar Convite
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setDialogOpen(true)}>
+                <Plus className="mr-2 h-4 w-4" />
+                Criar Usuário Direto
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
 
         <Card>
@@ -198,6 +221,11 @@ export default function Usuarios() {
         onOpenChange={handleDialogClose}
         user={editingUser}
         onSave={handleSave}
+      />
+
+      <InvitationDialog
+        open={inviteDialogOpen}
+        onOpenChange={setInviteDialogOpen}
       />
 
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>

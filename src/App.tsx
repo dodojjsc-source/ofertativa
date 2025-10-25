@@ -22,6 +22,7 @@ import Historico from "./pages/Historico";
 import FilaBitrix from "./pages/FilaBitrix";
 import Usuarios from "./pages/Usuarios";
 import Campanhas from "./pages/Campanhas";
+import AcceptInvite from "./pages/AcceptInvite";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -42,6 +43,7 @@ const App = () => (
                       <Route path="/" element={<Index />} />
                       <Route path="/auth" element={<Auth />} />
                       <Route path="/login" element={<Login />} />
+                      <Route path="/accept-invite" element={<AcceptInvite />} />
                       <Route
                         path="/dashboard"
                         element={

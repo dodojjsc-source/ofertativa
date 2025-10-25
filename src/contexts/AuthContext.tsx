@@ -31,20 +31,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const loadUserProfile = async (userId: string) => {
       try {
-        const { data: profile, error } = await supabase
+        const { data: profile, error: profileError } = await supabase
           .from("profiles")
           .select("*")
           .eq("id", userId)
           .single();
 
-        if (error) throw error;
+        if (profileError) throw profileError;
 
-        if (mounted && profile) {
+        // Buscar role da tabela user_roles
+        const { data: userRole, error: roleError } = await supabase
+          .from("user_roles")
+          .select("role")
+          .eq("user_id", userId)
+          .single();
+
+        if (roleError) throw roleError;
+
+        if (mounted && profile && userRole) {
           setUser({
             id: profile.id,
             name: profile.name,
             email: profile.email,
-            role: profile.role,
+            role: userRole.role as UserRole,
             gestorId: profile.gestor_id,
           });
         }
