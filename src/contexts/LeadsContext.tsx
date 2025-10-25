@@ -50,7 +50,7 @@ export function LeadsProvider({ children }: { children: ReactNode }) {
         .from("leads")
         .select(`
           *,
-          campanhas:campanha_id (nome)
+          campanhas!campanha_id (nome)
         `)
         .order("created_at", { ascending: false });
 
