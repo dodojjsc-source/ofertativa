@@ -9,6 +9,7 @@ import {
   History, 
   Users, 
   FolderOpen,
+  Send,
   LogOut 
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -28,6 +29,7 @@ export function Layout({ children }: { children: ReactNode }) {
     { path: "/upload", label: "Upload", icon: Upload, roles: ["admin", "gestor"] },
     { path: "/atendimento", label: "Atendimento", icon: Phone, roles: ["corretor"] },
     { path: "/historico", label: "Histórico", icon: History, roles: ["admin", "gestor", "corretor"] },
+    { path: "/fila-bitrix", label: "Fila Bitrix", icon: Send, roles: ["admin", "gestor"] },
     { path: "/usuarios", label: "Usuários", icon: Users, roles: ["admin"] },
     { path: "/campanhas", label: "Campanhas", icon: FolderOpen, roles: ["admin"] },
   ];

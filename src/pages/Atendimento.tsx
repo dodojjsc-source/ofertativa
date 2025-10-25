@@ -2,6 +2,8 @@ import { useState, useEffect } from "react";
 import { Layout } from "@/components/Layout";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLeads, FeedbackType } from "@/contexts/LeadsContext";
+import { useBitrixQueue } from "@/contexts/BitrixQueueContext";
+import { useUsers } from "@/contexts/UsersContext";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -15,6 +17,8 @@ import { toast } from "@/hooks/use-toast";
 export default function Atendimento() {
   const { user } = useAuth();
   const { getLeadsByCorretor, updateLead } = useLeads();
+  const { addToQueue } = useBitrixQueue();
+  const { users } = useUsers();
   const [currentLead, setCurrentLead] = useState<any>(null);
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
   const [feedback, setFeedback] = useState<FeedbackType>("interessado");
@@ -62,7 +66,7 @@ export default function Atendimento() {
       return;
     }
 
-    if (currentLead) {
+    if (currentLead && user) {
       updateLead(currentLead.id, {
         status: "atendido",
         feedback,
@@ -70,9 +74,39 @@ export default function Atendimento() {
         repassarBitrix,
         dataAtendimento: new Date().toISOString(),
       });
+
+      // Se marcou "Repassar para Bitrix", adicionar à fila
+      if (repassarBitrix) {
+        const gestor = users.find((u) => u.id === currentLead.gestorId);
+        const corretor = users.find((u) => u.id === currentLead.corretorId);
+        
+        const added = addToQueue({
+          leadId: currentLead.id,
+          campanhaId: currentLead.campanha,
+          campanhaNome: currentLead.campanha,
+          nome: currentLead.nome,
+          telefone: currentLead.telefone,
+          email: currentLead.email,
+          corretorId: user.id,
+          corretorNome: corretor?.name || user.name,
+          gestorId: gestor?.id || "",
+          gestorNome: gestor?.name || "",
+          feedback,
+          observacao,
+        });
+
+        if (!added) {
+          toast({
+            title: "Lead já está na fila",
+            description: "Este lead já foi adicionado à fila do Bitrix",
+            variant: "destructive",
+          });
+        }
+      }
+
       toast({
         title: "Feedback registrado com sucesso",
-        description: repassarBitrix ? "Lead será repassado ao Bitrix" : "Próximo contato carregado",
+        description: repassarBitrix ? "Lead adicionado à fila do Bitrix" : "Próximo contato carregado",
       });
       setShowFeedbackModal(false);
       loadNextLead();
