@@ -10,6 +10,8 @@ import { FiltersProvider } from "@/contexts/FiltersContext";
 import { BitrixQueueProvider } from "@/contexts/BitrixQueueContext";
 import { AssignmentsProvider } from "@/contexts/AssignmentsContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
+import Index from "./pages/Index";
+import Auth from "./pages/Auth";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import Producao from "./pages/Producao";
@@ -26,8 +28,8 @@ const queryClient = new QueryClient();
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
-    <UsersProvider>
-      <AuthProvider>
+    <AuthProvider>
+      <UsersProvider>
         <LeadsProvider>
           <AssignmentsProvider>
             <BitrixQueueProvider>
@@ -37,7 +39,9 @@ const App = () => (
                   <Sonner />
                   <BrowserRouter>
                     <Routes>
-                      <Route path="/" element={<Login />} />
+                      <Route path="/" element={<Index />} />
+                      <Route path="/auth" element={<Auth />} />
+                      <Route path="/login" element={<Login />} />
                       <Route
                         path="/dashboard"
                         element={
@@ -73,7 +77,7 @@ const App = () => (
                       <Route
                         path="/atendimento"
                         element={
-                          <ProtectedRoute allowedRoles={["corretor"]}>
+                          <ProtectedRoute>
                             <Atendimento />
                           </ProtectedRoute>
                         }
@@ -97,7 +101,7 @@ const App = () => (
                       <Route
                         path="/usuarios"
                         element={
-                          <ProtectedRoute allowedRoles={["admin"]}>
+                          <ProtectedRoute allowedRoles={["admin", "gestor"]}>
                             <Usuarios />
                           </ProtectedRoute>
                         }
@@ -105,7 +109,7 @@ const App = () => (
                       <Route
                         path="/campanhas"
                         element={
-                          <ProtectedRoute allowedRoles={["admin"]}>
+                          <ProtectedRoute allowedRoles={["admin", "gestor"]}>
                             <Campanhas />
                           </ProtectedRoute>
                         }
@@ -118,8 +122,8 @@ const App = () => (
             </BitrixQueueProvider>
           </AssignmentsProvider>
         </LeadsProvider>
-      </AuthProvider>
-    </UsersProvider>
+      </UsersProvider>
+    </AuthProvider>
   </QueryClientProvider>
 );
 
