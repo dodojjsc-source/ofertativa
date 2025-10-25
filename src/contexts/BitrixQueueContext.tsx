@@ -1,4 +1,7 @@
 import { createContext, useContext, useState, ReactNode, useEffect } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "./AuthContext";
+import { toast } from "@/hooks/use-toast";
 
 export type BitrixQueueStatus = "pendente" | "processado" | "erro" | "descartado";
 
@@ -24,60 +27,146 @@ export interface BitrixQueueItem {
 
 interface BitrixQueueContextType {
   queue: BitrixQueueItem[];
-  addToQueue: (item: Omit<BitrixQueueItem, "id" | "statusFila" | "timestampCriacao">) => boolean;
-  updateStatus: (ids: string[], status: BitrixQueueStatus, processadoPor?: string) => void;
+  loading: boolean;
+  addToQueue: (item: Omit<BitrixQueueItem, "id" | "statusFila" | "timestampCriacao">) => Promise<boolean>;
+  updateStatus: (ids: string[], status: BitrixQueueStatus, processadoPor?: string) => Promise<void>;
   getQueueByGestor: (gestorId: string) => BitrixQueueItem[];
   exportPendingCSV: (items: BitrixQueueItem[]) => void;
 }
 
 const BitrixQueueContext = createContext<BitrixQueueContextType | undefined>(undefined);
 
-const STORAGE_KEY = "localStorage.bitrixQueue";
-
 export function BitrixQueueProvider({ children }: { children: ReactNode }) {
-  const [queue, setQueue] = useState<BitrixQueueItem[]>(() => {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    return stored ? JSON.parse(stored) : [];
-  });
+  const [queue, setQueue] = useState<BitrixQueueItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const { user } = useAuth();
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(queue));
-  }, [queue]);
-
-  const addToQueue = (item: Omit<BitrixQueueItem, "id" | "statusFila" | "timestampCriacao">): boolean => {
-    // Verificar duplicidade por leadId com status pendente ou processado
-    const isDuplicate = queue.some(
-      (q) => q.leadId === item.leadId && (q.statusFila === "pendente" || q.statusFila === "processado")
-    );
-
-    if (isDuplicate) {
-      return false;
+    if (user) {
+      loadQueue();
     }
+  }, [user]);
 
-    const newItem: BitrixQueueItem = {
-      ...item,
-      id: `bitrix_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-      statusFila: "pendente",
-      timestampCriacao: new Date().toISOString(),
-    };
+  const loadQueue = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("bitrix_queue")
+        .select("*")
+        .order("timestamp_criacao", { ascending: false });
 
-    setQueue((prev) => [...prev, newItem]);
-    return true;
+      if (error) throw error;
+
+      const mappedQueue: BitrixQueueItem[] = (data || []).map((item) => ({
+        id: item.id,
+        leadId: item.lead_id,
+        campanhaId: item.campanha_id || "",
+        campanhaNome: "",
+        nome: item.nome,
+        telefone: item.telefone,
+        email: undefined,
+        corretorId: item.corretor_id || "",
+        corretorNome: "",
+        gestorId: item.gestor_id || "",
+        gestorNome: "",
+        feedback: item.feedback || "",
+        observacao: item.observacao || "",
+        statusFila: item.status_fila as BitrixQueueStatus,
+        timestampCriacao: item.timestamp_criacao,
+        timestampProcessamento: item.timestamp_processamento || undefined,
+        processadoPor: item.processado_por || undefined,
+      }));
+
+      setQueue(mappedQueue);
+    } catch (error: any) {
+      console.error("Erro ao carregar fila Bitrix:", error);
+      toast({
+        title: "Erro",
+        description: "Não foi possível carregar a fila do Bitrix",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const updateStatus = (ids: string[], status: BitrixQueueStatus, processadoPor?: string) => {
-    setQueue((prev) =>
-      prev.map((item) =>
-        ids.includes(item.id)
-          ? {
-              ...item,
-              statusFila: status,
-              timestampProcessamento: status === "processado" ? new Date().toISOString() : item.timestampProcessamento,
-              processadoPor: status === "processado" ? processadoPor : item.processadoPor,
-            }
-          : item
-      )
-    );
+  const addToQueue = async (item: Omit<BitrixQueueItem, "id" | "statusFila" | "timestampCriacao">): Promise<boolean> => {
+    try {
+      const { data: existing, error: checkError } = await supabase
+        .from("bitrix_queue")
+        .select("id")
+        .eq("lead_id", item.leadId)
+        .in("status_fila", ["pendente", "processado"])
+        .limit(1);
+
+      if (checkError) throw checkError;
+
+      if (existing && existing.length > 0) {
+        toast({
+          title: "Aviso",
+          description: "Este lead já está na fila do Bitrix",
+          variant: "destructive",
+        });
+        return false;
+      }
+
+      const { error } = await supabase.from("bitrix_queue").insert({
+        lead_id: item.leadId,
+        campanha_id: item.campanhaId || null,
+        nome: item.nome,
+        telefone: item.telefone,
+        corretor_id: item.corretorId || null,
+        gestor_id: item.gestorId || null,
+        feedback: item.feedback as any,
+        observacao: item.observacao,
+        status_fila: "pendente",
+      });
+
+      if (error) throw error;
+
+      await loadQueue();
+      toast({
+        title: "Sucesso",
+        description: "Lead adicionado à fila do Bitrix",
+      });
+      return true;
+    } catch (error: any) {
+      console.error("Erro ao adicionar à fila:", error);
+      toast({
+        title: "Erro",
+        description: error.message || "Não foi possível adicionar à fila do Bitrix",
+        variant: "destructive",
+      });
+      return false;
+    }
+  };
+
+  const updateStatus = async (ids: string[], status: BitrixQueueStatus, processadoPor?: string) => {
+    try {
+      const updates: any = { status_fila: status };
+      if (status === "processado") {
+        updates.processado_por = processadoPor;
+      }
+
+      const { error } = await supabase
+        .from("bitrix_queue")
+        .update(updates)
+        .in("id", ids);
+
+      if (error) throw error;
+
+      await loadQueue();
+      toast({
+        title: "Sucesso",
+        description: `Status atualizado para ${ids.length} item(ns)`,
+      });
+    } catch (error: any) {
+      console.error("Erro ao atualizar status:", error);
+      toast({
+        title: "Erro",
+        description: error.message || "Não foi possível atualizar o status",
+        variant: "destructive",
+      });
+    }
   };
 
   const getQueueByGestor = (gestorId: string) => {
@@ -133,6 +222,7 @@ export function BitrixQueueProvider({ children }: { children: ReactNode }) {
     <BitrixQueueContext.Provider
       value={{
         queue,
+        loading,
         addToQueue,
         updateStatus,
         getQueueByGestor,

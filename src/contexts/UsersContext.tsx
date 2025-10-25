@@ -1,4 +1,7 @@
 import { createContext, useContext, useState, ReactNode, useEffect } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "./AuthContext";
+import { toast } from "@/hooks/use-toast";
 
 export type UserRole = "admin" | "gestor" | "corretor";
 
@@ -10,82 +13,141 @@ export interface AppUser {
   role: UserRole;
   gestorId?: string;
   status: "ativo" | "inativo";
-  metaDiaria?: number; // Meta de ligações diárias (default: 60)
+  metaDiaria?: number;
 }
 
 interface UsersContextType {
   users: AppUser[];
-  addUser: (user: Omit<AppUser, "id">) => void;
-  updateUser: (id: string, updates: Partial<AppUser>) => void;
-  deleteUser: (id: string) => boolean;
+  loading: boolean;
+  addUser: (user: Omit<AppUser, "id">) => Promise<void>;
+  updateUser: (id: string, updates: Partial<AppUser>) => Promise<void>;
+  deleteUser: (id: string) => Promise<boolean>;
   getUserById: (id: string) => AppUser | undefined;
   getGestores: () => AppUser[];
   getCorretoresByGestor: (gestorId: string) => AppUser[];
-  canDeleteUser: (id: string) => { canDelete: boolean; reason?: string };
+  canDeleteUser: (id: string) => Promise<{ canDelete: boolean; reason?: string }>;
 }
 
 const UsersContext = createContext<UsersContextType | undefined>(undefined);
 
-const STORAGE_KEY = "users";
-
-const initialUsers: AppUser[] = [
-  { id: "1", name: "Admin Master", email: "admin@sistema.com", role: "admin", status: "ativo" },
-  { id: "2", name: "Gestor Silva", email: "gestor@sistema.com", role: "gestor", status: "ativo" },
-  { id: "3", name: "Corretor João", email: "corretor@sistema.com", telefone: "(11) 98765-4321", role: "corretor", gestorId: "2", status: "ativo" },
-];
-
 export function UsersProvider({ children }: { children: ReactNode }) {
-  // Recuperar usuários (tentar chave nova, depois antiga)
-  const getInitialUsers = (): AppUser[] => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored) {
-        return JSON.parse(stored);
-      }
-      
-      // Tentar recuperar da chave antiga
-      const oldStored = localStorage.getItem("localStorage.users");
-      if (oldStored) {
-        const oldUsers = JSON.parse(oldStored);
-        // Migrar para chave nova
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(oldUsers));
-        localStorage.removeItem("localStorage.users");
-        return oldUsers;
-      }
-    } catch (error) {
-      console.error("Erro ao carregar usuários:", error);
-    }
-    return initialUsers;
-  };
-
-  const [users, setUsers] = useState<AppUser[]>(getInitialUsers());
+  const [users, setUsers] = useState<AppUser[]>([]);
+  const [loading, setLoading] = useState(true);
+  const { user } = useAuth();
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(users));
-  }, [users]);
+    if (user) {
+      loadUsers();
+    }
+  }, [user]);
 
-  const addUser = (user: Omit<AppUser, "id">) => {
-    const newUser: AppUser = {
-      ...user,
-      id: Date.now().toString(),
-    };
-    setUsers((prev) => [...prev, newUser]);
+  const loadUsers = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("*")
+        .order("name");
+
+      if (error) throw error;
+
+      const mappedUsers: AppUser[] = (data || []).map((profile) => ({
+        id: profile.id,
+        name: profile.name,
+        email: profile.email,
+        telefone: profile.telefone || undefined,
+        role: profile.role as UserRole,
+        gestorId: profile.gestor_id || undefined,
+        status: profile.status as "ativo" | "inativo",
+        metaDiaria: profile.meta_diaria || 60,
+      }));
+
+      setUsers(mappedUsers);
+    } catch (error: any) {
+      console.error("Erro ao carregar usuários:", error);
+      toast({
+        title: "Erro",
+        description: "Não foi possível carregar os usuários",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const updateUser = (id: string, updates: Partial<AppUser>) => {
-    setUsers((prev) =>
-      prev.map((user) => (user.id === id ? { ...user, ...updates } : user))
-    );
+  const addUser = async (user: Omit<AppUser, "id">) => {
+    // Para adicionar usuários, você precisa criar através do signup do Supabase Auth
+    // Esta função não deve ser usada diretamente
+    toast({
+      title: "Aviso",
+      description: "Use o sistema de autenticação para criar novos usuários",
+      variant: "destructive",
+    });
   };
 
-  const deleteUser = (id: string): boolean => {
-    const { canDelete, reason } = canDeleteUser(id);
+  const updateUser = async (id: string, updates: Partial<AppUser>) => {
+    try {
+      const dbUpdates: any = {};
+      if (updates.name !== undefined) dbUpdates.name = updates.name;
+      if (updates.email !== undefined) dbUpdates.email = updates.email;
+      if (updates.telefone !== undefined) dbUpdates.telefone = updates.telefone;
+      if (updates.role !== undefined) dbUpdates.role = updates.role;
+      if (updates.gestorId !== undefined) dbUpdates.gestor_id = updates.gestorId;
+      if (updates.status !== undefined) dbUpdates.status = updates.status;
+      if (updates.metaDiaria !== undefined) dbUpdates.meta_diaria = updates.metaDiaria;
+
+      const { error } = await supabase
+        .from("profiles")
+        .update(dbUpdates)
+        .eq("id", id);
+
+      if (error) throw error;
+
+      await loadUsers();
+      toast({
+        title: "Sucesso",
+        description: "Usuário atualizado com sucesso",
+      });
+    } catch (error: any) {
+      console.error("Erro ao atualizar usuário:", error);
+      toast({
+        title: "Erro",
+        description: error.message || "Não foi possível atualizar o usuário",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const deleteUser = async (id: string): Promise<boolean> => {
+    const { canDelete, reason } = await canDeleteUser(id);
     if (!canDelete) {
-      console.error(reason);
+      toast({
+        title: "Erro",
+        description: reason,
+        variant: "destructive",
+      });
       return false;
     }
-    setUsers((prev) => prev.filter((user) => user.id !== id));
-    return true;
+
+    try {
+      const { error } = await supabase.from("profiles").delete().eq("id", id);
+
+      if (error) throw error;
+
+      await loadUsers();
+      toast({
+        title: "Sucesso",
+        description: "Usuário removido com sucesso",
+      });
+      return true;
+    } catch (error: any) {
+      console.error("Erro ao remover usuário:", error);
+      toast({
+        title: "Erro",
+        description: error.message || "Não foi possível remover o usuário",
+        variant: "destructive",
+      });
+      return false;
+    }
   };
 
   const getUserById = (id: string) => {
@@ -100,11 +162,10 @@ export function UsersProvider({ children }: { children: ReactNode }) {
     return users.filter((user) => user.role === "corretor" && user.gestorId === gestorId);
   };
 
-  const canDeleteUser = (id: string): { canDelete: boolean; reason?: string } => {
+  const canDeleteUser = async (id: string): Promise<{ canDelete: boolean; reason?: string }> => {
     const user = getUserById(id);
     if (!user) return { canDelete: false, reason: "Usuário não encontrado" };
 
-    // Não permitir excluir Gestor com Corretores vinculados
     if (user.role === "gestor") {
       const corretores = getCorretoresByGestor(id);
       if (corretores.length > 0) {
@@ -112,18 +173,21 @@ export function UsersProvider({ children }: { children: ReactNode }) {
       }
     }
 
-    // Verificar se tem lote em aberto (leads pendentes)
-    const leadsData = localStorage.getItem("leads");
-    if (leadsData) {
-      const leads = JSON.parse(leadsData);
-      const hasOpenLote = leads.some(
-        (lead: any) => 
-          lead.status === "pendente" && 
-          (lead.corretorId === id || lead.gestorId === id)
-      );
-      if (hasOpenLote) {
+    try {
+      const { data, error } = await supabase
+        .from("leads")
+        .select("id")
+        .eq("status", "pendente")
+        .or(`corretor_id.eq.${id},gestor_id.eq.${id}`)
+        .limit(1);
+
+      if (error) throw error;
+
+      if (data && data.length > 0) {
         return { canDelete: false, reason: "Não é possível excluir usuário com lote em aberto" };
       }
+    } catch (error) {
+      console.error("Erro ao verificar leads:", error);
     }
 
     return { canDelete: true };
@@ -133,6 +197,7 @@ export function UsersProvider({ children }: { children: ReactNode }) {
     <UsersContext.Provider
       value={{
         users,
+        loading,
         addUser,
         updateUser,
         deleteUser,

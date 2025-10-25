@@ -60,10 +60,10 @@ export default function Usuarios() {
     setDeleteDialogOpen(true);
   };
 
-  const confirmDelete = () => {
+  const confirmDelete = async () => {
     if (!userToDelete) return;
 
-    const { canDelete, reason } = canDeleteUser(userToDelete);
+    const { canDelete, reason } = await canDeleteUser(userToDelete);
     if (!canDelete) {
       toast({
         title: "Não foi possível excluir",
@@ -75,7 +75,7 @@ export default function Usuarios() {
       return;
     }
 
-    if (deleteUser(userToDelete)) {
+    if (await deleteUser(userToDelete)) {
       toast({
         title: "Usuário excluído",
         description: "Usuário removido com sucesso",

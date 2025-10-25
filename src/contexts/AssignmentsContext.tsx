@@ -1,49 +1,110 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "./AuthContext";
+import { toast } from "@/hooks/use-toast";
 
 export interface Assignment {
   id: string;
   campanhaId: string;
   leadId: string;
   corretorId: string;
-  statusDistribuicao: "pendente" | "atendido" | "nao_atendido";
+  gestorId?: string;
+  statusDistribuicao: "pendente" | "concluido";
   timestampAtribuicao: string;
 }
 
 interface AssignmentsContextType {
   assignments: Assignment[];
-  addAssignments: (newAssignments: Omit<Assignment, "id" | "timestampAtribuicao">[]) => void;
+  loading: boolean;
+  addAssignments: (newAssignments: Omit<Assignment, "id" | "timestampAtribuicao">[]) => Promise<void>;
   getAssignmentsByCorretor: (corretorId: string) => Assignment[];
   getAssignmentsByCampanha: (campanhaId: string) => Assignment[];
   getPendingCountByCorretor: (corretorId: string) => number;
   isLeadAssigned: (campanhaId: string, leadId: string) => boolean;
-  updateAssignmentStatus: (id: string, status: Assignment["statusDistribuicao"]) => void;
-  undoLastDistribution: () => boolean;
+  updateAssignmentStatus: (id: string, status: Assignment["statusDistribuicao"]) => Promise<void>;
+  undoLastDistribution: () => Promise<boolean>;
 }
 
 const AssignmentsContext = createContext<AssignmentsContextType | undefined>(undefined);
 
 export function AssignmentsProvider({ children }: { children: ReactNode }) {
-  const [assignments, setAssignments] = useState<Assignment[]>(() => {
-    const stored = localStorage.getItem("assignments");
-    return stored ? JSON.parse(stored) : [];
-  });
+  const [assignments, setAssignments] = useState<Assignment[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [lastDistributionIds, setLastDistributionIds] = useState<string[]>([]);
+  const { user } = useAuth();
 
   useEffect(() => {
-    localStorage.setItem("assignments", JSON.stringify(assignments));
-  }, [assignments]);
+    if (user) {
+      loadAssignments();
+    }
+  }, [user]);
 
-  const addAssignments = (newAssignments: Omit<Assignment, "id" | "timestampAtribuicao">[]) => {
-    const timestamp = new Date().toISOString();
-    const assignmentsWithId = newAssignments.map((a) => ({
-      ...a,
-      id: `assignment-${Date.now()}-${Math.random()}`,
-      timestampAtribuicao: timestamp,
-    }));
+  const loadAssignments = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("assignments")
+        .select("*")
+        .order("timestamp_atribuicao", { ascending: false });
 
-    // Salvar snapshot para undo
-    localStorage.setItem("tmp.lastDistribution", JSON.stringify(assignmentsWithId));
+      if (error) throw error;
 
-    setAssignments((prev) => [...prev, ...assignmentsWithId]);
+      const mappedAssignments: Assignment[] = (data || []).map((assignment) => ({
+        id: assignment.id,
+        campanhaId: assignment.campanha_id || "",
+        leadId: assignment.lead_id,
+        corretorId: assignment.corretor_id,
+        gestorId: assignment.gestor_id || undefined,
+        statusDistribuicao: assignment.status_distribuicao as "pendente" | "concluido",
+        timestampAtribuicao: assignment.timestamp_atribuicao,
+      }));
+
+      setAssignments(mappedAssignments);
+    } catch (error: any) {
+      console.error("Erro ao carregar atribuições:", error);
+      toast({
+        title: "Erro",
+        description: "Não foi possível carregar as atribuições",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const addAssignments = async (newAssignments: Omit<Assignment, "id" | "timestampAtribuicao">[]) => {
+    try {
+      const dbAssignments = newAssignments.map((assignment) => ({
+        campanha_id: assignment.campanhaId,
+        lead_id: assignment.leadId,
+        corretor_id: assignment.corretorId,
+        gestor_id: assignment.gestorId,
+        status_distribuicao: assignment.statusDistribuicao,
+      }));
+
+      const { data, error } = await supabase
+        .from("assignments")
+        .insert(dbAssignments)
+        .select();
+
+      if (error) throw error;
+
+      if (data) {
+        setLastDistributionIds(data.map((a) => a.id));
+      }
+
+      await loadAssignments();
+      toast({
+        title: "Sucesso",
+        description: `${newAssignments.length} atribuição(ões) criada(s) com sucesso`,
+      });
+    } catch (error: any) {
+      console.error("Erro ao adicionar atribuições:", error);
+      toast({
+        title: "Erro",
+        description: error.message || "Não foi possível adicionar as atribuições",
+        variant: "destructive",
+      });
+    }
   };
 
   const getAssignmentsByCorretor = (corretorId: string) => {
@@ -66,28 +127,67 @@ export function AssignmentsProvider({ children }: { children: ReactNode }) {
     );
   };
 
-  const updateAssignmentStatus = (id: string, status: Assignment["statusDistribuicao"]) => {
-    setAssignments((prev) =>
-      prev.map((a) => (a.id === id ? { ...a, statusDistribuicao: status } : a))
-    );
+  const updateAssignmentStatus = async (id: string, status: Assignment["statusDistribuicao"]) => {
+    try {
+      const { error } = await supabase
+        .from("assignments")
+        .update({ status_distribuicao: status })
+        .eq("id", id);
+
+      if (error) throw error;
+
+      await loadAssignments();
+    } catch (error: any) {
+      console.error("Erro ao atualizar status:", error);
+      toast({
+        title: "Erro",
+        description: error.message || "Não foi possível atualizar o status",
+        variant: "destructive",
+      });
+    }
   };
 
-  const undoLastDistribution = () => {
-    const lastDistribution = localStorage.getItem("tmp.lastDistribution");
-    if (!lastDistribution) return false;
+  const undoLastDistribution = async () => {
+    if (lastDistributionIds.length === 0) {
+      toast({
+        title: "Aviso",
+        description: "Não há distribuição recente para desfazer",
+        variant: "destructive",
+      });
+      return false;
+    }
 
-    const lastAssignments: Assignment[] = JSON.parse(lastDistribution);
-    const lastIds = new Set(lastAssignments.map((a) => a.id));
+    try {
+      const { error } = await supabase
+        .from("assignments")
+        .delete()
+        .in("id", lastDistributionIds);
 
-    setAssignments((prev) => prev.filter((a) => !lastIds.has(a.id)));
-    localStorage.removeItem("tmp.lastDistribution");
-    return true;
+      if (error) throw error;
+
+      setLastDistributionIds([]);
+      await loadAssignments();
+      toast({
+        title: "Sucesso",
+        description: "Distribuição desfeita com sucesso",
+      });
+      return true;
+    } catch (error: any) {
+      console.error("Erro ao desfazer distribuição:", error);
+      toast({
+        title: "Erro",
+        description: error.message || "Não foi possível desfazer a distribuição",
+        variant: "destructive",
+      });
+      return false;
+    }
   };
 
   return (
     <AssignmentsContext.Provider
       value={{
         assignments,
+        loading,
         addAssignments,
         getAssignmentsByCorretor,
         getAssignmentsByCampanha,
