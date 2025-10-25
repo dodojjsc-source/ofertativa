@@ -13,6 +13,13 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Upload as UploadIcon, FileSpreadsheet, RefreshCw, Undo2 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
+import { z } from "zod";
+
+const leadSchema = z.object({
+  nome: z.string().trim().min(2, "Nome deve ter no mínimo 2 caracteres").max(100, "Nome muito longo"),
+  telefone: z.string().trim().regex(/^\+?[\d\s()-]{10,15}$/, "Telefone inválido"),
+  email: z.string().trim().email("Email inválido").max(255, "Email muito longo").optional().or(z.literal("")),
+});
 
 export default function Upload() {
   const { user } = useAuth();
@@ -29,12 +36,7 @@ export default function Upload() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const loadCorretoresElegiveis = useCallback(() => {
-    console.log("🔄 Carregando corretores elegíveis...");
-    console.log("👤 User atual:", user);
-    console.log("📊 Total de usuários no contexto:", users.length);
-
     if (!user) {
-      console.log("⚠️ Nenhum usuário logado");
       setCorretoresElegiveis([]);
       return;
     }
@@ -42,18 +44,14 @@ export default function Upload() {
     let eligible: AppUser[] = [];
     if (user.role === "admin") {
       eligible = users.filter(u => u.role === "corretor" && u.status === "ativo");
-      console.log("👑 Admin: vendo todos os corretores ativos");
     } else if (user.role === "gestor") {
       eligible = users.filter(u => 
         u.role === "corretor" && 
         u.status === "ativo" && 
         u.gestorId === user.id
       );
-      console.log(`👔 Gestor: vendo corretores vinculados ao ID ${user.id}`);
     }
 
-    console.log("✅ Corretores elegíveis encontrados:", eligible.length);
-    console.log("📋 Lista:", eligible);
     setCorretoresElegiveis(eligible);
   }, [user, users]);
 
@@ -82,17 +80,24 @@ export default function Upload() {
       const worksheet = workbook.Sheets[sheetName];
       const jsonData = XLSX.utils.sheet_to_json<any>(worksheet);
 
-      // Validar e parsear dados
+      // Validar e parsear dados com Zod
       const parsedLeads = jsonData.map((row, index) => {
-        const nome = row.Nome || row.nome || row.NOME || "";
-        const telefone = row.Telefone || row.telefone || row.TELEFONE || "";
-        const email = row.Email || row.email || row.EMAIL || "";
+        const rawLead = {
+          nome: String(row.Nome || row.nome || row.NOME || "").trim(),
+          telefone: String(row.Telefone || row.telefone || row.TELEFONE || "").trim(),
+          email: row.Email || row.email || row.EMAIL ? String(row.Email || row.email || row.EMAIL).trim() : "",
+        };
 
-        if (!nome || !telefone) {
-          throw new Error(`Linha ${index + 2}: Nome e Telefone são obrigatórios`);
+        const validation = leadSchema.safeParse(rawLead);
+        if (!validation.success) {
+          throw new Error(`Linha ${index + 2}: ${validation.error.errors[0].message}`);
         }
 
-        return { nome: String(nome).trim(), telefone: String(telefone).trim(), email: email ? String(email).trim() : undefined };
+        return {
+          nome: validation.data.nome,
+          telefone: validation.data.telefone,
+          email: validation.data.email || undefined,
+        };
       });
 
       setImportedLeads(parsedLeads);
@@ -222,7 +227,6 @@ export default function Upload() {
     addAssignments(newAssignments);
 
     // Atualizar os leads com o corretorId e gestorId correto
-    console.log("📦 Atualizando leads com corretorId...");
     newAssignments.forEach((assignment) => {
       const corretor = corretoresElegiveis.find(c => c.id === assignment.corretorId);
       updateLead(assignment.leadId, { 
@@ -230,7 +234,6 @@ export default function Upload() {
         gestorId: corretor?.gestorId || user?.id || ""
       });
     });
-    console.log(`✅ ${newAssignments.length} leads atualizados com sucesso`);
 
     // 4. Resumo
     const resumo = selectedCorretores.map((corretorId) => {

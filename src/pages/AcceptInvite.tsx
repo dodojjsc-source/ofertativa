@@ -7,6 +7,14 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "@/hooks/use-toast";
 import { Eye, EyeOff } from "lucide-react";
+import { z } from "zod";
+
+const passwordSchema = z.string()
+  .min(12, "A senha deve ter no mínimo 12 caracteres")
+  .regex(/[A-Z]/, "A senha deve conter pelo menos uma letra maiúscula")
+  .regex(/[a-z]/, "A senha deve conter pelo menos uma letra minúscula")
+  .regex(/[0-9]/, "A senha deve conter pelo menos um número")
+  .regex(/[^A-Za-z0-9]/, "A senha deve conter pelo menos um caractere especial");
 
 export default function AcceptInvite() {
   const [searchParams] = useSearchParams();
@@ -37,10 +45,12 @@ export default function AcceptInvite() {
   const handleAcceptInvite = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (password.length < 6) {
+    // Validar senha forte
+    const passwordValidation = passwordSchema.safeParse(password);
+    if (!passwordValidation.success) {
       toast({
-        title: "Senha muito curta",
-        description: "A senha deve ter pelo menos 6 caracteres",
+        title: "Senha fraca",
+        description: passwordValidation.error.errors[0].message,
         variant: "destructive",
       });
       return;
@@ -72,7 +82,6 @@ export default function AcceptInvite() {
         navigate("/dashboard");
       }, 1500);
     } catch (error: any) {
-      console.error("Erro ao aceitar convite:", error);
       toast({
         title: "Erro",
         description: error.message || "Não foi possível ativar sua conta",
@@ -104,11 +113,14 @@ export default function AcceptInvite() {
                 <Input
                   id="password"
                   type={showPassword ? "text" : "password"}
-                  placeholder="Mínimo 6 caracteres"
+                  placeholder="Mínimo 12 caracteres com maiúscula, minúscula, número e especial"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
                 />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Senha forte: min. 12 caracteres, maiúscula, minúscula, número e caractere especial
+                </p>
                 <Button
                   type="button"
                   variant="ghost"

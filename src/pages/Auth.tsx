@@ -6,7 +6,14 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { toast } from "@/hooks/use-toast";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { z } from "zod";
+
+const passwordSchema = z.string()
+  .min(12, "A senha deve ter no mínimo 12 caracteres")
+  .regex(/[A-Z]/, "A senha deve conter pelo menos uma letra maiúscula")
+  .regex(/[a-z]/, "A senha deve conter pelo menos uma letra minúscula")
+  .regex(/[0-9]/, "A senha deve conter pelo menos um número")
+  .regex(/[^A-Za-z0-9]/, "A senha deve conter pelo menos um caractere especial");
 
 export default function Auth() {
   const navigate = useNavigate();
@@ -16,7 +23,6 @@ export default function Auth() {
     email: "",
     password: "",
     name: "",
-    role: "corretor" as "admin" | "gestor" | "corretor",
   });
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -39,13 +45,24 @@ export default function Auth() {
         
         navigate("/dashboard");
       } else {
+        // Validar senha forte no signup
+        const passwordValidation = passwordSchema.safeParse(formData.password);
+        if (!passwordValidation.success) {
+          toast({
+            title: "Senha fraca",
+            description: passwordValidation.error.errors[0].message,
+            variant: "destructive",
+          });
+          return;
+        }
+
         const { error } = await supabase.auth.signUp({
           email: formData.email,
           password: formData.password,
           options: {
             data: {
               name: formData.name,
-              role: formData.role,
+              role: "corretor", // Sempre corretor para signup público
             },
             emailRedirectTo: `${window.location.origin}/dashboard`,
           },
@@ -85,39 +102,19 @@ export default function Auth() {
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
             {!isLogin && (
-              <>
-                <div className="space-y-2">
-                  <Label htmlFor="name">Nome</Label>
-                  <Input
-                    id="name"
-                    type="text"
-                    placeholder="Seu nome completo"
-                    value={formData.name}
-                    onChange={(e) =>
-                      setFormData({ ...formData, name: e.target.value })
-                    }
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="role">Perfil</Label>
-                  <Select
-                    value={formData.role}
-                    onValueChange={(value: "admin" | "gestor" | "corretor") =>
-                      setFormData({ ...formData, role: value })
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="admin">Admin</SelectItem>
-                      <SelectItem value="gestor">Gestor</SelectItem>
-                      <SelectItem value="corretor">Corretor</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </>
+              <div className="space-y-2">
+                <Label htmlFor="name">Nome</Label>
+                <Input
+                  id="name"
+                  type="text"
+                  placeholder="Seu nome completo"
+                  value={formData.name}
+                  onChange={(e) =>
+                    setFormData({ ...formData, name: e.target.value })
+                  }
+                  required
+                />
+              </div>
             )}
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
@@ -137,13 +134,18 @@ export default function Auth() {
               <Input
                 id="password"
                 type="password"
-                placeholder="••••••••"
+                placeholder={isLogin ? "••••••••" : "Mínimo 12 caracteres, maiúscula, minúscula, número e especial"}
                 value={formData.password}
                 onChange={(e) =>
                   setFormData({ ...formData, password: e.target.value })
                 }
                 required
               />
+              {!isLogin && (
+                <p className="text-xs text-muted-foreground">
+                  Senha forte: min. 12 caracteres, maiúscula, minúscula, número e caractere especial
+                </p>
+              )}
             </div>
             <Button type="submit" className="w-full" disabled={loading}>
               {loading ? "Processando..." : isLogin ? "Entrar" : "Criar Conta"}

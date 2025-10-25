@@ -74,7 +74,6 @@ export function LeadsProvider({ children }: { children: ReactNode }) {
 
       setLeads(mappedLeads);
     } catch (error: any) {
-      console.error("Erro ao carregar leads:", error);
       toast({
         title: "Erro",
         description: "Não foi possível carregar os leads",
@@ -111,7 +110,6 @@ export function LeadsProvider({ children }: { children: ReactNode }) {
         description: `${newLeads.length} lead(s) adicionado(s) com sucesso`,
       });
     } catch (error: any) {
-      console.error("Erro ao adicionar leads:", error);
       toast({
         title: "Erro",
         description: error.message || "Não foi possível adicionar os leads",
@@ -144,7 +142,6 @@ export function LeadsProvider({ children }: { children: ReactNode }) {
 
       await loadLeads();
     } catch (error: any) {
-      console.error("Erro ao atualizar lead:", error);
       toast({
         title: "Erro",
         description: error.message || "Não foi possível atualizar o lead",
@@ -165,7 +162,6 @@ export function LeadsProvider({ children }: { children: ReactNode }) {
         description: "Lead removido com sucesso",
       });
     } catch (error: any) {
-      console.error("Erro ao remover lead:", error);
       toast({
         title: "Erro",
         description: error.message || "Não foi possível remover o lead",
