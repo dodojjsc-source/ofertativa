@@ -250,13 +250,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "leads_campanha_id_fkey"
-            columns: ["campanha_id"]
-            isOneToOne: false
-            referencedRelation: "campanhas"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "leads_corretor_id_fkey"
             columns: ["corretor_id"]
             isOneToOne: false
