@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import * as XLSX from "xlsx";
 import { Layout } from "@/components/Layout";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLeads } from "@/contexts/LeadsContext";
@@ -23,6 +24,9 @@ export default function Upload() {
   const [campanha, setCampanha] = useState("");
   const [selectedCorretores, setSelectedCorretores] = useState<string[]>([]);
   const [corretoresElegiveis, setCorretoresElegiveis] = useState<AppUser[]>([]);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [importedLeads, setImportedLeads] = useState<Array<{nome: string; telefone: string; email?: string}>>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const loadCorretoresElegiveis = useCallback(() => {
     console.log("🔄 Carregando corretores elegíveis...");
@@ -65,6 +69,49 @@ export default function Upload() {
     );
   };
 
+  const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setSelectedFile(file);
+
+    try {
+      const data = await file.arrayBuffer();
+      const workbook = XLSX.read(data, { type: "array" });
+      const sheetName = workbook.SheetNames[0];
+      const worksheet = workbook.Sheets[sheetName];
+      const jsonData = XLSX.utils.sheet_to_json<any>(worksheet);
+
+      // Validar e parsear dados
+      const parsedLeads = jsonData.map((row, index) => {
+        const nome = row.Nome || row.nome || row.NOME || "";
+        const telefone = row.Telefone || row.telefone || row.TELEFONE || "";
+        const email = row.Email || row.email || row.EMAIL || "";
+
+        if (!nome || !telefone) {
+          throw new Error(`Linha ${index + 2}: Nome e Telefone são obrigatórios`);
+        }
+
+        return { nome: String(nome).trim(), telefone: String(telefone).trim(), email: email ? String(email).trim() : undefined };
+      });
+
+      setImportedLeads(parsedLeads);
+      toast({
+        title: "Arquivo carregado",
+        description: `${parsedLeads.length} leads encontrados na planilha`,
+      });
+    } catch (error) {
+      console.error("Erro ao processar arquivo:", error);
+      toast({
+        title: "Erro ao ler arquivo",
+        description: error instanceof Error ? error.message : "Verifique o formato da planilha",
+        variant: "destructive",
+      });
+      setSelectedFile(null);
+      setImportedLeads([]);
+    }
+  };
+
   const handleDistribuir = () => {
     if (!campanha) {
       toast({
@@ -84,20 +131,35 @@ export default function Upload() {
       return;
     }
 
-    // 1. Gerar leads mock para a campanha
-    const totalLeadsNeeded = loteSize * selectedCorretores.length;
-    const mockImportedLeads = Array.from({ length: totalLeadsNeeded }, (_, i) => ({
-      id: `lead-${campanha}-${Date.now()}-${i}`,
-      nome: `Lead ${i + 1}`,
-      telefone: `(11) 9${Math.floor(Math.random() * 10000)}-${Math.floor(Math.random() * 10000)}`,
-      email: `lead${i + 1}@email.com`,
-      campanha: campanha,
-      corretorId: "",
-      gestorId: user?.id || "",
-      status: "pendente" as const,
-    }));
+    // 1. Usar leads importados ou gerar mock se não houver arquivo
+    let leadsToImport;
+    if (importedLeads.length > 0) {
+      leadsToImport = importedLeads.map((lead, i) => ({
+        id: `lead-${campanha}-${Date.now()}-${i}`,
+        nome: lead.nome,
+        telefone: lead.telefone,
+        email: lead.email,
+        campanha: campanha,
+        corretorId: "",
+        gestorId: user?.id || "",
+        status: "pendente" as const,
+      }));
+    } else {
+      // Fallback para leads mock se não houver arquivo
+      const totalLeadsNeeded = loteSize * selectedCorretores.length;
+      leadsToImport = Array.from({ length: totalLeadsNeeded }, (_, i) => ({
+        id: `lead-${campanha}-${Date.now()}-${i}`,
+        nome: `Lead ${i + 1}`,
+        telefone: `(11) 9${Math.floor(Math.random() * 10000)}-${Math.floor(Math.random() * 10000)}`,
+        email: `lead${i + 1}@email.com`,
+        campanha: campanha,
+        corretorId: "",
+        gestorId: user?.id || "",
+        status: "pendente" as const,
+      }));
+    }
 
-    addLeads(mockImportedLeads);
+    addLeads(leadsToImport);
 
     // 2. Buscar pool de leads não atribuídos da campanha
     const campanhaId = campanha;
@@ -105,7 +167,7 @@ export default function Upload() {
       getAssignmentsByCampanha(campanhaId).map((a) => a.leadId)
     );
     
-    const allLeads = [...leads, ...mockImportedLeads];
+    const allLeads = [...leads, ...leadsToImport];
     const pool = allLeads.filter(
       (l) => l.campanha === campanhaId && !assignedSet.has(l.id)
     );
@@ -183,6 +245,8 @@ export default function Upload() {
 
     setCampanha("");
     setSelectedCorretores([]);
+    setSelectedFile(null);
+    setImportedLeads([]);
   };
 
   const handleUndo = () => {
@@ -298,13 +362,42 @@ export default function Upload() {
               </div>
 
               <div className="border-2 border-dashed border-border rounded-lg p-8 text-center space-y-2">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".xlsx,.xls"
+                  onChange={handleFileSelect}
+                  className="hidden"
+                />
                 <FileSpreadsheet className="h-12 w-12 mx-auto text-muted-foreground" />
-                <p className="text-sm text-muted-foreground">
-                  Arraste sua planilha Excel aqui ou clique para selecionar
-                </p>
-                <Button variant="outline" size="sm">
-                  Selecionar Arquivo
-                </Button>
+                {selectedFile ? (
+                  <>
+                    <p className="text-sm font-medium">{selectedFile.name}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {importedLeads.length} leads carregados
+                    </p>
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => fileInputRef.current?.click()}
+                    >
+                      Alterar Arquivo
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-sm text-muted-foreground">
+                      Arraste sua planilha Excel aqui ou clique para selecionar
+                    </p>
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => fileInputRef.current?.click()}
+                    >
+                      Selecionar Arquivo
+                    </Button>
+                  </>
+                )}
               </div>
 
               <Button
@@ -358,11 +451,13 @@ export default function Upload() {
                 </p>
               </div>
 
-              <div className="p-4 bg-accent/10 border border-accent/20 rounded-lg">
-                <p className="text-sm">
-                  <strong>Demo:</strong> Nesta versão, o sistema simula a importação gerando leads fictícios para demonstração.
-                </p>
-              </div>
+              {importedLeads.length === 0 && (
+                <div className="p-4 bg-accent/10 border border-accent/20 rounded-lg">
+                  <p className="text-sm">
+                    <strong>Modo Demo:</strong> Sem arquivo selecionado, o sistema gerará leads fictícios para demonstração.
+                  </p>
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
