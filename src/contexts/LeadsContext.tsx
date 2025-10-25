@@ -12,8 +12,8 @@ export interface Lead {
   email?: string;
   campanha: string;
   campanhaId?: string;
-  corretorId?: string;
-  gestorId?: string;
+  corretorId?: string | null;
+  gestorId?: string | null;
   status: "pendente" | "atendido" | "nao_atendido";
   feedback?: FeedbackType;
   observacao?: string;
@@ -53,7 +53,8 @@ export function LeadsProvider({ children }: { children: ReactNode }) {
           *,
           campanhas!fk_leads_campanha (nome)
         `)
-        .order("created_at", { ascending: false });
+        .order("data_atendimento", { ascending: true, nullsFirst: true })
+        .order("created_at", { ascending: true });
 
       if (error) throw error;
 

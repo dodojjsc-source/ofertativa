@@ -29,12 +29,12 @@ export default function Atendimento() {
     loadNextLead();
   }, []);
 
-  const loadNextLead = () => {
+  const loadNextLead = (skipId?: string) => {
     if (user) {
       const leads = getLeadsByCorretor(user.id);
       console.log(`📋 Leads do corretor ${user.name} (ID: ${user.id}):`, leads.length);
       console.log("📊 Leads pendentes:", leads.filter(l => l.status === "pendente").length);
-      const nextLead = leads.find((l) => l.status === "pendente");
+      const nextLead = leads.find((l) => l.status === "pendente" && l.id !== skipId);
       setCurrentLead(nextLead || null);
     }
   };
@@ -52,7 +52,7 @@ export default function Atendimento() {
         // 3ª tentativa ou mais: liberar lead para redistribuição
         await updateLead(currentLead.id, {
           status: "nao_atendido",
-          corretorId: undefined, // Remove o corretor (volta para pool)
+          corretorId: null, // Remove o corretor (volta para pool)
           tentativasContato: 0, // Reseta contador
           dataAtendimento: new Date().toISOString(),
         });
@@ -62,24 +62,22 @@ export default function Atendimento() {
           description: "Após 3 tentativas, o lead foi devolvido ao pool da campanha",
         });
       } else {
-        // 1ª ou 2ª tentativa: manter pendente para o mesmo corretor
+        // 1ª ou 2ª tentativa: manter pendente para o mesmo corretor e enviar para fim da fila
         await updateLead(currentLead.id, {
           status: "pendente",
           tentativasContato: novasTentativas,
-          dataAtendimento: new Date().toISOString(),
+          dataAtendimento: new Date().toISOString(), // Envia para fim da fila
         });
         
         toast({
           title: `Tentativa ${novasTentativas} de 3 registrada`,
-          description: "Lead permanece na sua lista para nova tentativa",
+          description: "Lead enviado para o fim da sua fila",
         });
       }
 
-      // Aguardar um momento para o state do context ser atualizado
-      setTimeout(() => {
-        loadNextLead();
-        resetForm();
-      }, 300);
+      // Avanço imediato para o próximo lead
+      loadNextLead(currentLead.id);
+      resetForm();
     }
   };
 
@@ -138,11 +136,9 @@ export default function Atendimento() {
       });
       setShowFeedbackModal(false);
       
-      // Aguardar um momento para o state do context ser atualizado
-      setTimeout(() => {
-        loadNextLead();
-        resetForm();
-      }, 300);
+      // Avanço imediato para o próximo lead
+      loadNextLead(currentLead.id);
+      resetForm();
     }
   };
 
