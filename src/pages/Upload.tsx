@@ -15,9 +15,33 @@ import { Upload as UploadIcon, FileSpreadsheet, RefreshCw, Undo2 } from "lucide-
 import { toast } from "@/hooks/use-toast";
 import { z } from "zod";
 
+// Helpers para normalizar cabeçalhos e extrair telefones
+const normalizeHeader = (s: string) =>
+  s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, "").trim();
+
+const getCell = (row: any, candidates: string[]) => {
+  const map = Object.fromEntries(Object.keys(row).map(k => [normalizeHeader(k), row[k]]));
+  for (const c of candidates) {
+    const v = map[normalizeHeader(c)];
+    if (v !== undefined) return v;
+  }
+  return undefined;
+};
+
+const extractFirstValidPhone = (raw: string): string | null => {
+  if (!raw) return null;
+  const parts = String(raw).split(/[;,/|]/).map(p => p.trim()).filter(Boolean);
+  const candidates = parts.length ? parts : [String(raw)];
+  for (const cand of candidates) {
+    const digits = cand.replace(/\D/g, "");
+    if (digits.length >= 10 && digits.length <= 15) return cand;
+  }
+  return null;
+};
+
 const leadSchema = z.object({
   nome: z.string().trim().nonempty("Nome não pode estar vazio").max(100, "Nome muito longo"),
-  telefone: z.string().trim().regex(/^\+?[\d\s()-]{10,15}$/, "Telefone inválido"),
+  telefone: z.string().trim().nonempty("Telefone não pode estar vazio"),
   email: z.string().trim().email("Email inválido").max(255, "Email muito longo").optional().or(z.literal("")),
 });
 
@@ -81,14 +105,30 @@ export default function Upload() {
       const jsonData = XLSX.utils.sheet_to_json<any>(worksheet);
 
       // Validar e parsear dados com Zod
+      let multiplePhoneCount = 0;
       const parsedLeads = jsonData.map((row, index) => {
-        const rawLead = {
-          nome: String(row.Nome || row.nome || row.NOME || "").trim(),
-          telefone: String(row.Telefone || row.telefone || row.TELEFONE || "").trim(),
-          email: row.Email || row.email || row.EMAIL ? String(row.Email || row.email || row.EMAIL).trim() : "",
-        };
+        const rawNome = String(getCell(row, ["Nome", "nome", "NOME"]) ?? "").trim();
+        const rawTel = String(getCell(row, ["Telefone", "telefone", "TELEFONE"]) ?? "").trim();
+        const rawMail = String(getCell(row, ["Email", "email", "EMAIL"]) ?? "").trim();
 
-        const validation = leadSchema.safeParse(rawLead);
+        // Extrair primeiro telefone válido
+        const firstPhone = extractFirstValidPhone(rawTel);
+        if (!firstPhone) {
+          throw new Error(`Linha ${index + 2}: Telefone inválido. Você pode separar múltiplos telefones por vírgula, ponto e vírgula, barra ou pipe (|)`);
+        }
+
+        // Detectar se havia múltiplos telefones
+        const parts = rawTel.split(/[;,/|]/).map(p => p.trim()).filter(Boolean);
+        if (parts.length > 1) {
+          multiplePhoneCount++;
+        }
+
+        const validation = leadSchema.safeParse({
+          nome: rawNome,
+          telefone: firstPhone,
+          email: rawMail,
+        });
+
         if (!validation.success) {
           throw new Error(`Linha ${index + 2}: ${validation.error.errors[0].message}`);
         }
@@ -101,9 +141,13 @@ export default function Upload() {
       });
 
       setImportedLeads(parsedLeads);
+      const description = multiplePhoneCount > 0
+        ? `${parsedLeads.length} leads encontrados. ${multiplePhoneCount} linha(s) com múltiplos telefones — importamos o primeiro número válido.`
+        : `${parsedLeads.length} leads encontrados na planilha`;
+      
       toast({
         title: "Arquivo carregado",
-        description: `${parsedLeads.length} leads encontrados na planilha`,
+        description,
       });
     } catch (error) {
       console.error("Erro ao processar arquivo:", error);
