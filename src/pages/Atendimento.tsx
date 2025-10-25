@@ -43,22 +43,47 @@ export default function Atendimento() {
     setShowFeedbackModal(true);
   };
 
-  const handleNaoAtendeu = () => {
+  const handleNaoAtendeu = async () => {
     if (currentLead) {
-      updateLead(currentLead.id, {
-        status: "nao_atendido",
-        dataAtendimento: new Date().toISOString(),
-      });
-      toast({
-        title: "Lead marcado como não atendido",
-        description: "Próximo contato carregado",
-      });
-      loadNextLead();
-      resetForm();
+      const tentativasAtuais = currentLead.tentativasContato || 0;
+      const novasTentativas = tentativasAtuais + 1;
+
+      if (novasTentativas >= 3) {
+        // 3ª tentativa ou mais: liberar lead para redistribuição
+        await updateLead(currentLead.id, {
+          status: "nao_atendido",
+          corretorId: undefined, // Remove o corretor (volta para pool)
+          tentativasContato: 0, // Reseta contador
+          dataAtendimento: new Date().toISOString(),
+        });
+        
+        toast({
+          title: "Lead liberado para redistribuição",
+          description: "Após 3 tentativas, o lead foi devolvido ao pool da campanha",
+        });
+      } else {
+        // 1ª ou 2ª tentativa: manter pendente para o mesmo corretor
+        await updateLead(currentLead.id, {
+          status: "pendente",
+          tentativasContato: novasTentativas,
+          dataAtendimento: new Date().toISOString(),
+        });
+        
+        toast({
+          title: `Tentativa ${novasTentativas} de 3 registrada`,
+          description: "Lead permanece na sua lista para nova tentativa",
+        });
+      }
+
+      // Aguardar um momento para o state do context ser atualizado
+      setTimeout(() => {
+        loadNextLead();
+        resetForm();
+      }, 300);
     }
   };
 
-  const handleSubmitFeedback = () => {
+  const handleSubmitFeedback = async () => {
     if (!observacao.trim()) {
       toast({
         title: "Observação obrigatória",
@@ -69,12 +94,13 @@ export default function Atendimento() {
     }
 
     if (currentLead && user) {
-      updateLead(currentLead.id, {
+      await updateLead(currentLead.id, {
         status: "atendido",
         feedback,
         observacao,
         repassarBitrix,
         dataAtendimento: new Date().toISOString(),
+        tentativasContato: 0, // Reseta tentativas quando atendeu
       });
 
       // Se marcou "Repassar para Bitrix", adicionar à fila
@@ -84,7 +110,7 @@ export default function Atendimento() {
         
         const added = addToQueue({
           leadId: currentLead.id,
-          campanhaId: currentLead.campanha,
+          campanhaId: currentLead.campanhaId || "",
           campanhaNome: currentLead.campanha,
           nome: currentLead.nome,
           telefone: currentLead.telefone,
@@ -111,8 +137,12 @@ export default function Atendimento() {
         description: repassarBitrix ? "Lead adicionado à fila do Bitrix" : "Próximo contato carregado",
       });
       setShowFeedbackModal(false);
-      loadNextLead();
-      resetForm();
+      
+      // Aguardar um momento para o state do context ser atualizado
+      setTimeout(() => {
+        loadNextLead();
+        resetForm();
+      }, 300);
     }
   };
 

@@ -19,6 +19,7 @@ export interface Lead {
   observacao?: string;
   repassarBitrix?: boolean;
   dataAtendimento?: string;
+  tentativasContato?: number;
 }
 
 interface LeadsContextType {
@@ -50,7 +51,7 @@ export function LeadsProvider({ children }: { children: ReactNode }) {
         .from("leads")
         .select(`
           *,
-          campanhas!campanha_id (nome)
+          campanhas!fk_leads_campanha (nome)
         `)
         .order("created_at", { ascending: false });
 
@@ -70,6 +71,7 @@ export function LeadsProvider({ children }: { children: ReactNode }) {
         observacao: lead.observacao || undefined,
         repassarBitrix: lead.repassar_bitrix || false,
         dataAtendimento: lead.data_atendimento || undefined,
+        tentativasContato: lead.tentativas_contato || 0,
       }));
 
       setLeads(mappedLeads);
@@ -132,6 +134,7 @@ export function LeadsProvider({ children }: { children: ReactNode }) {
       if (updates.observacao !== undefined) dbUpdates.observacao = updates.observacao;
       if (updates.repassarBitrix !== undefined) dbUpdates.repassar_bitrix = updates.repassarBitrix;
       if (updates.dataAtendimento !== undefined) dbUpdates.data_atendimento = updates.dataAtendimento;
+      if (updates.tentativasContato !== undefined) dbUpdates.tentativas_contato = updates.tentativasContato;
 
       const { error } = await supabase
         .from("leads")

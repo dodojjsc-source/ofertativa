@@ -207,6 +207,7 @@ export type Database = {
           repassar_bitrix: boolean | null
           status: Database["public"]["Enums"]["lead_status"]
           telefone: string
+          tentativas_contato: number
           updated_at: string
         }
         Insert: {
@@ -223,6 +224,7 @@ export type Database = {
           repassar_bitrix?: boolean | null
           status?: Database["public"]["Enums"]["lead_status"]
           telefone: string
+          tentativas_contato?: number
           updated_at?: string
         }
         Update: {
@@ -239,6 +241,7 @@ export type Database = {
           repassar_bitrix?: boolean | null
           status?: Database["public"]["Enums"]["lead_status"]
           telefone?: string
+          tentativas_contato?: number
           updated_at?: string
         }
         Relationships: [
