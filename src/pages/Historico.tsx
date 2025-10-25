@@ -1,0 +1,135 @@
+import { Layout } from "@/components/Layout";
+import { useAuth } from "@/contexts/AuthContext";
+import { useLeads } from "@/contexts/LeadsContext";
+import { Card, CardContent } from "@/components/ui/card";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Trash2, Eye } from "lucide-react";
+import { toast } from "@/hooks/use-toast";
+
+export default function Historico() {
+  const { user } = useAuth();
+  const { leads, getLeadsByCorretor, getLeadsByGestor, deleteLead } = useLeads();
+
+  const getFilteredLeads = () => {
+    if (user?.role === "admin") return leads;
+    if (user?.role === "gestor") return getLeadsByGestor(user.id);
+    if (user?.role === "corretor") return getLeadsByCorretor(user.id);
+    return [];
+  };
+
+  const filteredLeads = getFilteredLeads().filter((l) => l.status === "atendido");
+
+  const handleDelete = (id: string) => {
+    if (user?.role === "admin" || user?.role === "gestor") {
+      deleteLead(id);
+      toast({
+        title: "Lead excluído",
+        description: "O lead foi removido do histórico",
+      });
+    } else {
+      toast({
+        title: "Sem permissão",
+        description: "Apenas Admin e Gestor podem excluir leads",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const getFeedbackBadge = (feedback?: string) => {
+    const variants: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
+      interessado: "default",
+      agendado: "secondary",
+      recusou: "destructive",
+      optout: "outline",
+    };
+    return (
+      <Badge variant={variants[feedback || ""] || "outline"}>
+        {feedback || "N/A"}
+      </Badge>
+    );
+  };
+
+  return (
+    <Layout>
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-3xl font-bold">Histórico de Atendimentos</h1>
+          <p className="text-muted-foreground">Leads processados com sucesso</p>
+        </div>
+
+        <Card>
+          <CardContent className="p-0">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Nome</TableHead>
+                  <TableHead>Telefone</TableHead>
+                  <TableHead>Campanha</TableHead>
+                  <TableHead>Feedback</TableHead>
+                  <TableHead>Bitrix</TableHead>
+                  <TableHead>Data</TableHead>
+                  <TableHead className="text-right">Ações</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredLeads.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
+                      Nenhum atendimento registrado
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  filteredLeads.map((lead) => (
+                    <TableRow key={lead.id}>
+                      <TableCell className="font-medium">{lead.nome}</TableCell>
+                      <TableCell>{lead.telefone}</TableCell>
+                      <TableCell>{lead.campanha}</TableCell>
+                      <TableCell>{getFeedbackBadge(lead.feedback)}</TableCell>
+                      <TableCell>
+                        {lead.repassarBitrix ? (
+                          <Badge variant="outline" className="bg-accent/10 text-accent border-accent">Sim</Badge>
+                        ) : (
+                          <Badge variant="outline">Não</Badge>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {lead.dataAtendimento
+                          ? new Date(lead.dataAtendimento).toLocaleDateString("pt-BR")
+                          : "-"}
+                      </TableCell>
+                      <TableCell className="text-right space-x-2">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => {
+                            toast({
+                              title: "Observação",
+                              description: lead.observacao || "Sem observação",
+                            });
+                          }}
+                        >
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                        {(user?.role === "admin" || user?.role === "gestor") && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleDelete(lead.id)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      </div>
+    </Layout>
+  );
+}
