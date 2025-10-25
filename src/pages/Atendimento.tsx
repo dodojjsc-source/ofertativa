@@ -36,18 +36,25 @@ export default function Atendimento() {
   }, [leads, user?.id, showFeedbackModal]);
   const loadNextLead = (skipId?: string) => {
     if (!user) return;
+    // Seleciona apenas pendentes do corretor atual
     const pending = leads.filter((l) => l.corretorId === user.id && l.status === "pendente");
-    console.log(`📋 Leads do corretor ${user.name} (ID: ${user.id}):`, pending.length);
-    console.log("📊 Leads pendentes:", pending.length);
 
-    if (!skipId && currentLead && pending.some((l) => l.id === currentLead.id)) {
+    // Ordena por dataAtendimento (nulos primeiro), depois por nome (fallback estável)
+    const sorted = [...pending].sort((a, b) => {
+      const aDate = a.dataAtendimento ? new Date(a.dataAtendimento).getTime() : -Infinity;
+      const bDate = b.dataAtendimento ? new Date(b.dataAtendimento).getTime() : -Infinity;
+      if (aDate !== bDate) return aDate - bDate;
+      return (a.nome || "").localeCompare(b.nome || "");
+    });
+
+    if (!skipId && currentLead && sorted.some((l) => l.id === currentLead.id)) {
       // Mantém o lead atual se ainda for válido
       setCurrentLead(currentLead);
       return;
     }
 
     const avoidId = skipId || currentLead?.id;
-    const next = pending.find((l) => l.id !== avoidId);
+    const next = sorted.find((l) => l.id !== avoidId);
     setCurrentLead(next || null);
   };
 

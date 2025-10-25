@@ -122,6 +122,11 @@ export function LeadsProvider({ children }: { children: ReactNode }) {
   };
 
   const updateLead = async (id: string, updates: Partial<Lead>) => {
+    // Atualização otimista: aplica no estado local imediatamente
+    setLeads((prev) =>
+      prev.map((l) => (l.id === id ? { ...l, ...updates } : l)),
+    );
+
     try {
       const dbUpdates: any = {};
       if (updates.nome !== undefined) dbUpdates.nome = updates.nome;
@@ -143,9 +148,11 @@ export function LeadsProvider({ children }: { children: ReactNode }) {
         .eq("id", id);
 
       if (error) throw error;
-
-      await loadLeads();
+      // Refresh em segundo plano (opcional)
+      // void loadLeads();
     } catch (error: any) {
+      // Reverte se falhar
+      await loadLeads();
       toast({
         title: "Erro",
         description: error.message || "Não foi possível atualizar o lead",
