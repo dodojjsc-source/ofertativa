@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { UsersProvider } from "@/contexts/UsersContext";
 import { LeadsProvider } from "@/contexts/LeadsContext";
+import { CampanhasProvider } from "@/contexts/CampanhasContext";
 import { FiltersProvider } from "@/contexts/FiltersContext";
 import { BitrixQueueProvider } from "@/contexts/BitrixQueueContext";
 import { AssignmentsProvider } from "@/contexts/AssignmentsContext";
@@ -32,9 +33,10 @@ const App = () => (
     <AuthProvider>
       <UsersProvider>
         <LeadsProvider>
-          <AssignmentsProvider>
-            <BitrixQueueProvider>
-              <FiltersProvider>
+          <CampanhasProvider>
+            <AssignmentsProvider>
+              <BitrixQueueProvider>
+                <FiltersProvider>
                 <TooltipProvider>
                   <Toaster />
                   <Sonner />
@@ -120,9 +122,10 @@ const App = () => (
                     </Routes>
                   </BrowserRouter>
                 </TooltipProvider>
-              </FiltersProvider>
-            </BitrixQueueProvider>
-          </AssignmentsProvider>
+                </FiltersProvider>
+              </BitrixQueueProvider>
+            </AssignmentsProvider>
+          </CampanhasProvider>
         </LeadsProvider>
       </UsersProvider>
     </AuthProvider>

@@ -5,6 +5,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useLeads } from "@/contexts/LeadsContext";
 import { useUsers, AppUser } from "@/contexts/UsersContext";
 import { useAssignments } from "@/contexts/AssignmentsContext";
+import { useCampanhas } from "@/contexts/CampanhasContext";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -50,6 +51,7 @@ export default function Upload() {
   const { leads, addLeads, updateLead } = useLeads();
   const { users } = useUsers();
   const { addAssignments, getPendingCountByCorretor, getAssignmentsByCampanha, isLeadAssigned, undoLastDistribution } = useAssignments();
+  const { createCampanha } = useCampanhas();
   
   const [loteSize, setLoteSize] = useState(20);
   const [campanha, setCampanha] = useState("");
@@ -161,7 +163,66 @@ export default function Upload() {
     }
   };
 
-  const handleDistribuir = () => {
+  const handleUploadOnly = async () => {
+    if (!campanha) {
+      toast({
+        title: "Erro",
+        description: "Informe o nome da campanha",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (importedLeads.length === 0) {
+      toast({
+        title: "Erro",
+        description: "Nenhuma planilha carregada",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      // 1. Criar campanha no banco
+      const campanhaId = await createCampanha(campanha, importedLeads.length);
+      if (!campanhaId) {
+        throw new Error("Não foi possível criar a campanha");
+      }
+
+      // 2. Salvar leads SEM corretor_id (null)
+      const leadsToSave = importedLeads.map((lead) => ({
+        nome: lead.nome,
+        telefone: lead.telefone,
+        email: lead.email,
+        campanha: campanha,
+        campanhaId: campanhaId,
+        corretorId: undefined, // SEM CORRETOR
+        gestorId: user?.id || "",
+        status: "pendente" as const,
+      }));
+
+      await addLeads(leadsToSave);
+
+      toast({
+        title: "Upload concluído",
+        description: `${importedLeads.length} leads salvos na campanha "${campanha}". Você pode distribuí-los depois na página de Campanhas.`,
+      });
+
+      // Limpar formulário
+      setCampanha("");
+      setSelectedFile(null);
+      setImportedLeads([]);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    } catch (error: any) {
+      toast({
+        title: "Erro no upload",
+        description: error.message || "Não foi possível salvar os leads",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleDistribuir = async () => {
     if (!campanha) {
       toast({
         title: "Erro",
@@ -180,120 +241,128 @@ export default function Upload() {
       return;
     }
 
-    // 1. Usar leads importados ou gerar mock se não houver arquivo
-    let leadsToImport;
-    if (importedLeads.length > 0) {
-      leadsToImport = importedLeads.map((lead, i) => ({
-        id: `lead-${campanha}-${Date.now()}-${i}`,
-        nome: lead.nome,
-        telefone: lead.telefone,
-        email: lead.email,
-        campanha: campanha,
-        corretorId: "",
-        gestorId: user?.id || "",
-        status: "pendente" as const,
-      }));
-    } else {
-      // Fallback para leads mock se não houver arquivo
-      const totalLeadsNeeded = loteSize * selectedCorretores.length;
-      leadsToImport = Array.from({ length: totalLeadsNeeded }, (_, i) => ({
-        id: `lead-${campanha}-${Date.now()}-${i}`,
-        nome: `Lead ${i + 1}`,
-        telefone: `(11) 9${Math.floor(Math.random() * 10000)}-${Math.floor(Math.random() * 10000)}`,
-        email: `lead${i + 1}@email.com`,
-        campanha: campanha,
-        corretorId: "",
-        gestorId: user?.id || "",
-        status: "pendente" as const,
-      }));
-    }
-
-    addLeads(leadsToImport);
-
-    // 2. Buscar pool de leads não atribuídos da campanha
-    const campanhaId = campanha;
-    const assignedSet = new Set(
-      getAssignmentsByCampanha(campanhaId).map((a) => a.leadId)
-    );
-    
-    const allLeads = [...leads, ...leadsToImport];
-    const pool = allLeads.filter(
-      (l) => l.campanha === campanhaId && !assignedSet.has(l.id)
-    );
-
-    // 3. Distribuição round-robin
-    const newAssignments: Array<{
-      campanhaId: string;
-      leadId: string;
-      corretorId: string;
-      statusDistribuicao: "pendente";
-    }> = [];
-
-    const corretoresCount: Record<string, number> = {};
-    selectedCorretores.forEach((id) => (corretoresCount[id] = 0));
-
-    let corretorIndex = 0;
-    for (const lead of pool) {
-      const corretorId = selectedCorretores[corretorIndex];
-      
-      // Verificar duplicidade
-      if (isLeadAssigned(campanhaId, lead.id)) continue;
-
-      // Verificar se corretor já atingiu o limite
-      if (corretoresCount[corretorId] >= loteSize) {
-        // Tentar próximo corretor
-        const nextIndex = (corretorIndex + 1) % selectedCorretores.length;
-        if (nextIndex === 0) break; // Todos atingiram limite
-        corretorIndex = nextIndex;
-        continue;
-      }
-
-      newAssignments.push({
-        campanhaId,
-        leadId: lead.id,
-        corretorId,
-        statusDistribuicao: "pendente",
-      });
-
-      corretoresCount[corretorId]++;
-      corretorIndex = (corretorIndex + 1) % selectedCorretores.length;
-    }
-
-    if (newAssignments.length === 0) {
+    if (importedLeads.length === 0) {
       toast({
-        title: "Atenção",
-        description: "Nenhum lead disponível para distribuição",
+        title: "Erro",
+        description: "Nenhuma planilha carregada",
         variant: "destructive",
       });
       return;
     }
 
-    addAssignments(newAssignments);
+    try {
+      // 1. Criar campanha no banco
+      const campanhaId = await createCampanha(campanha, importedLeads.length);
+      if (!campanhaId) {
+        throw new Error("Não foi possível criar a campanha");
+      }
 
-    // Atualizar os leads com o corretorId e gestorId correto
-    newAssignments.forEach((assignment) => {
-      const corretor = corretoresElegiveis.find(c => c.id === assignment.corretorId);
-      updateLead(assignment.leadId, { 
-        corretorId: assignment.corretorId,
-        gestorId: corretor?.gestorId || user?.id || ""
+      // 2. Salvar leads COM corretor_id para distribuição imediata
+      const leadsToSave = importedLeads.map((lead) => ({
+        nome: lead.nome,
+        telefone: lead.telefone,
+        email: lead.email,
+        campanha: campanha,
+        campanhaId: campanhaId,
+        corretorId: undefined, // Inicialmente sem corretor
+        gestorId: user?.id || "",
+        status: "pendente" as const,
+      }));
+
+      await addLeads(leadsToSave);
+
+      // 3. Buscar pool de leads não atribuídos da campanha
+      const assignedSet = new Set(
+        getAssignmentsByCampanha(campanhaId).map((a) => a.leadId)
+      );
+      
+      // Recarregar leads para pegar os IDs recém-criados
+      await new Promise(resolve => setTimeout(resolve, 500)); // Aguardar sync
+      const pool = leads.filter(
+        (l) => l.campanhaId === campanhaId && !assignedSet.has(l.id)
+      );
+
+      // 4. Distribuição round-robin
+      const newAssignments: Array<{
+        campanhaId: string;
+        leadId: string;
+        corretorId: string;
+        statusDistribuicao: "pendente";
+      }> = [];
+
+      const corretoresCount: Record<string, number> = {};
+      selectedCorretores.forEach((id) => (corretoresCount[id] = 0));
+
+      let corretorIndex = 0;
+      for (const lead of pool) {
+        const corretorId = selectedCorretores[corretorIndex];
+        
+        // Verificar duplicidade
+        if (isLeadAssigned(campanhaId, lead.id)) continue;
+
+        // Verificar se corretor já atingiu o limite
+        if (corretoresCount[corretorId] >= loteSize) {
+          // Tentar próximo corretor
+          const nextIndex = (corretorIndex + 1) % selectedCorretores.length;
+          if (nextIndex === 0) break; // Todos atingiram limite
+          corretorIndex = nextIndex;
+          continue;
+        }
+
+        newAssignments.push({
+          campanhaId,
+          leadId: lead.id,
+          corretorId,
+          statusDistribuicao: "pendente",
+        });
+
+        corretoresCount[corretorId]++;
+        corretorIndex = (corretorIndex + 1) % selectedCorretores.length;
+      }
+
+      if (newAssignments.length === 0) {
+        toast({
+          title: "Atenção",
+          description: "Nenhum lead disponível para distribuição",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      addAssignments(newAssignments);
+
+      // Atualizar os leads com o corretorId e gestorId correto
+      newAssignments.forEach((assignment) => {
+        const corretor = corretoresElegiveis.find(c => c.id === assignment.corretorId);
+        updateLead(assignment.leadId, { 
+          corretorId: assignment.corretorId,
+          gestorId: corretor?.gestorId || user?.id || ""
+        });
       });
-    });
 
-    // 4. Resumo
-    const resumo = selectedCorretores.map((corretorId) => {
-      const corretor = corretoresElegiveis.find((c) => c.id === corretorId);
-      return `${corretor?.name}: ${corretoresCount[corretorId] || 0} leads`;
-    });
+      // 5. Resumo
+      const resumo = selectedCorretores.map((corretorId) => {
+        const corretor = corretoresElegiveis.find((c) => c.id === corretorId);
+        return `${corretor?.name}: ${corretoresCount[corretorId] || 0} leads`;
+      });
 
-    toast({
-      title: "Distribuição realizada",
-      description: resumo.join(" | "),
-    });
+      toast({
+        title: "Distribuição realizada",
+        description: resumo.join(" | "),
+      });
 
-    setCampanha("");
-    setSelectedCorretores([]);
-    setSelectedFile(null);
-    setImportedLeads([]);
+      setCampanha("");
+      setSelectedCorretores([]);
+      setSelectedFile(null);
+      setImportedLeads([]);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    } catch (error: any) {
+      toast({
+        title: "Erro na distribuição",
+        description: error.message || "Não foi possível distribuir os leads",
+        variant: "destructive",
+      });
+    }
   };
 
   const handleUndo = () => {
@@ -447,14 +516,28 @@ export default function Upload() {
                 )}
               </div>
 
-              <Button
-                onClick={handleDistribuir}
-                className="w-full"
-                size="lg"
-                disabled={selectedCorretores.length === 0 || !campanha}
-              >
-                Distribuir Leads ({selectedCorretores.length} corretores)
-              </Button>
+              <div className="grid grid-cols-2 gap-3">
+                <Button
+                  onClick={handleUploadOnly}
+                  className="w-full"
+                  size="lg"
+                  variant="outline"
+                  disabled={!campanha || importedLeads.length === 0}
+                >
+                  Salvar Leads
+                </Button>
+                <Button
+                  onClick={handleDistribuir}
+                  className="w-full"
+                  size="lg"
+                  disabled={selectedCorretores.length === 0 || !campanha || importedLeads.length === 0}
+                >
+                  Salvar e Distribuir
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground text-center">
+                Use "Salvar Leads" para guardar sem distribuir. Use "Salvar e Distribuir" para distribuição imediata.
+              </p>
             </CardContent>
           </Card>
 
