@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, ReactNode } from "react";
+import { createContext, useContext, useState, ReactNode, useEffect } from "react";
 
 export type FeedbackType = "interessado" | "agendado" | "recusou" | "optout";
 
@@ -66,8 +66,17 @@ const mockLeads: Lead[] = [
   },
 ];
 
+const STORAGE_KEY = "localStorage.leads";
+
 export function LeadsProvider({ children }: { children: ReactNode }) {
-  const [leads, setLeads] = useState<Lead[]>(mockLeads);
+  const [leads, setLeads] = useState<Lead[]>(() => {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    return stored ? JSON.parse(stored) : mockLeads;
+  });
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(leads));
+  }, [leads]);
 
   const addLeads = (newLeads: Lead[]) => {
     setLeads((prev) => [...prev, ...newLeads]);

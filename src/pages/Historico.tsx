@@ -1,6 +1,8 @@
 import { Layout } from "@/components/Layout";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLeads } from "@/contexts/LeadsContext";
+import { useFilters } from "@/contexts/FiltersContext";
+import { FiltersCard } from "@/components/FiltersCard";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
@@ -11,15 +13,46 @@ import { toast } from "@/hooks/use-toast";
 export default function Historico() {
   const { user } = useAuth();
   const { leads, getLeadsByCorretor, getLeadsByGestor, deleteLead } = useLeads();
+  const { filters } = useFilters();
 
   const getFilteredLeads = () => {
-    if (user?.role === "admin") return leads;
-    if (user?.role === "gestor") return getLeadsByGestor(user.id);
-    if (user?.role === "corretor") return getLeadsByCorretor(user.id);
-    return [];
+    let filtered = leads.filter((l) => l.status === "atendido");
+
+    // Filtrar por role do usuário
+    if (user?.role === "gestor") {
+      filtered = getLeadsByGestor(user.id).filter((l) => l.status === "atendido");
+    } else if (user?.role === "corretor") {
+      filtered = getLeadsByCorretor(user.id).filter((l) => l.status === "atendido");
+    }
+
+    // Aplicar filtros adicionais
+    if (filters.gestorId) {
+      filtered = filtered.filter((l) => l.gestorId === filters.gestorId);
+    }
+    if (filters.corretorId) {
+      filtered = filtered.filter((l) => l.corretorId === filters.corretorId);
+    }
+    if (filters.campanha) {
+      filtered = filtered.filter((l) => l.campanha === filters.campanha);
+    }
+    if (filters.feedback) {
+      filtered = filtered.filter((l) => l.feedback === filters.feedback);
+    }
+    if (filters.startDate) {
+      filtered = filtered.filter((l) => 
+        l.dataAtendimento && l.dataAtendimento >= filters.startDate!
+      );
+    }
+    if (filters.endDate) {
+      filtered = filtered.filter((l) => 
+        l.dataAtendimento && l.dataAtendimento <= filters.endDate!
+      );
+    }
+
+    return filtered;
   };
 
-  const filteredLeads = getFilteredLeads().filter((l) => l.status === "atendido");
+  const filteredLeads = getFilteredLeads();
 
   const handleDelete = (id: string) => {
     if (user?.role === "admin" || user?.role === "gestor") {
@@ -58,6 +91,8 @@ export default function Historico() {
           <h1 className="text-3xl font-bold">Histórico de Atendimentos</h1>
           <p className="text-muted-foreground">Leads processados com sucesso</p>
         </div>
+
+        <FiltersCard />
 
         <Card>
           <CardContent className="p-0">

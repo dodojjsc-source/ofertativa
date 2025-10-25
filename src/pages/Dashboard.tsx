@@ -1,18 +1,51 @@
 import { Layout } from "@/components/Layout";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLeads } from "@/contexts/LeadsContext";
+import { useFilters } from "@/contexts/FiltersContext";
+import { FiltersCard } from "@/components/FiltersCard";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Phone, PhoneOff, TrendingUp, Users } from "lucide-react";
 
 export default function Dashboard() {
   const { user } = useAuth();
   const { leads, getLeadsByCorretor, getLeadsByGestor } = useLeads();
+  const { filters } = useFilters();
 
   const getFilteredLeads = () => {
-    if (user?.role === "admin") return leads;
-    if (user?.role === "gestor") return getLeadsByGestor(user.id);
-    if (user?.role === "corretor") return getLeadsByCorretor(user.id);
-    return [];
+    let filtered = leads;
+
+    // Filtrar por role do usuário
+    if (user?.role === "gestor") {
+      filtered = getLeadsByGestor(user.id);
+    } else if (user?.role === "corretor") {
+      filtered = getLeadsByCorretor(user.id);
+    }
+
+    // Aplicar filtros adicionais
+    if (filters.gestorId) {
+      filtered = filtered.filter((l) => l.gestorId === filters.gestorId);
+    }
+    if (filters.corretorId) {
+      filtered = filtered.filter((l) => l.corretorId === filters.corretorId);
+    }
+    if (filters.campanha) {
+      filtered = filtered.filter((l) => l.campanha === filters.campanha);
+    }
+    if (filters.feedback) {
+      filtered = filtered.filter((l) => l.feedback === filters.feedback);
+    }
+    if (filters.startDate) {
+      filtered = filtered.filter((l) => 
+        l.dataAtendimento && l.dataAtendimento >= filters.startDate!
+      );
+    }
+    if (filters.endDate) {
+      filtered = filtered.filter((l) => 
+        l.dataAtendimento && l.dataAtendimento <= filters.endDate!
+      );
+    }
+
+    return filtered;
   };
 
   const filteredLeads = getFilteredLeads();
@@ -36,6 +69,8 @@ export default function Dashboard() {
           <h1 className="text-3xl font-bold">Dashboard</h1>
           <p className="text-muted-foreground">Visão geral do desempenho</p>
         </div>
+
+        <FiltersCard />
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <Card>

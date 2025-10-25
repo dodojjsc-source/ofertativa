@@ -1,22 +1,33 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
+import { useUsers } from "@/contexts/UsersContext";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "@/hooks/use-toast";
 
 export default function Login() {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [selectedUserId, setSelectedUserId] = useState("");
   const { login } = useAuth();
+  const { users } = useUsers();
   const navigate = useNavigate();
+
+  const activeUsers = users.filter((u) => u.status === "ativo");
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (login(email, password)) {
+    if (!selectedUserId) {
+      toast({
+        title: "Selecione um usuário",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    if (login(selectedUserId)) {
       toast({
         title: "Login realizado com sucesso",
         description: "Redirecionando para o dashboard...",
@@ -25,7 +36,7 @@ export default function Login() {
     } else {
       toast({
         title: "Erro ao fazer login",
-        description: "Email ou senha inválidos",
+        description: "Usuário não encontrado ou inativo",
         variant: "destructive",
       });
     }
@@ -41,26 +52,19 @@ export default function Login() {
         <CardContent>
           <form onSubmit={handleLogin} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="seu@email.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="password">Senha</Label>
-              <Input
-                id="password"
-                type="password"
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-              />
+              <Label htmlFor="user">Selecione o Usuário</Label>
+              <Select value={selectedUserId} onValueChange={setSelectedUserId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Escolha um usuário..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {activeUsers.map((user) => (
+                    <SelectItem key={user.id} value={user.id}>
+                      {user.name} ({user.role})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <Button type="submit" className="w-full">
               Entrar
@@ -68,21 +72,9 @@ export default function Login() {
           </form>
 
           <div className="mt-6 pt-6 border-t border-border">
-            <p className="text-sm text-muted-foreground mb-3">Credenciais de teste:</p>
-            <div className="space-y-2 text-xs">
-              <div className="bg-muted p-2 rounded">
-                <p className="font-semibold">Admin:</p>
-                <p>admin@sistema.com</p>
-              </div>
-              <div className="bg-muted p-2 rounded">
-                <p className="font-semibold">Gestor:</p>
-                <p>gestor@sistema.com</p>
-              </div>
-              <div className="bg-muted p-2 rounded">
-                <p className="font-semibold">Corretor:</p>
-                <p>corretor@sistema.com</p>
-              </div>
-            </div>
+            <p className="text-sm text-muted-foreground">
+              Sistema de demonstração com autenticação simplificada
+            </p>
           </div>
         </CardContent>
       </Card>
