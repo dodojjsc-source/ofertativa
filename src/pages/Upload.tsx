@@ -59,6 +59,7 @@ export default function Upload() {
   const [corretoresElegiveis, setCorretoresElegiveis] = useState<AppUser[]>([]);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [importedLeads, setImportedLeads] = useState<Array<{nome: string; telefone: string; email?: string}>>([]);
+  const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const loadCorretoresElegiveis = useCallback(() => {
@@ -164,6 +165,8 @@ export default function Upload() {
   };
 
   const handleUploadOnly = async () => {
+    if (isUploading) return;
+    
     if (!campanha) {
       toast({
         title: "Erro",
@@ -182,6 +185,7 @@ export default function Upload() {
       return;
     }
 
+    setIsUploading(true);
     try {
       // 1. Criar campanha no banco
       const campanhaId = await createCampanha(campanha, importedLeads.length);
@@ -219,10 +223,14 @@ export default function Upload() {
         description: error.message || "Não foi possível salvar os leads",
         variant: "destructive",
       });
+    } finally {
+      setIsUploading(false);
     }
   };
 
   const handleDistribuir = async () => {
+    if (isUploading) return;
+    
     if (!campanha) {
       toast({
         title: "Erro",
@@ -250,6 +258,7 @@ export default function Upload() {
       return;
     }
 
+    setIsUploading(true);
     try {
       // 1. Criar campanha no banco
       const campanhaId = await createCampanha(campanha, importedLeads.length);
@@ -362,6 +371,8 @@ export default function Upload() {
         description: error.message || "Não foi possível distribuir os leads",
         variant: "destructive",
       });
+    } finally {
+      setIsUploading(false);
     }
   };
 
@@ -522,16 +533,17 @@ export default function Upload() {
                   className="w-full"
                   size="lg"
                   variant="outline"
-                  disabled={!campanha || importedLeads.length === 0}
+                  disabled={!campanha || importedLeads.length === 0 || isUploading}
                 >
-                  Salvar Leads
+                  {isUploading ? "Salvando..." : "Salvar Leads"}
                 </Button>
                 <Button
                   onClick={handleDistribuir}
                   className="w-full"
                   size="lg"
-                  disabled={selectedCorretores.length === 0 || !campanha || importedLeads.length === 0}
+                  disabled={selectedCorretores.length === 0 || !campanha || importedLeads.length === 0 || isUploading}
                 >
+                  {isUploading ? "Distribuindo..." : "Distribuir Leads"}
                   Salvar e Distribuir
                 </Button>
               </div>

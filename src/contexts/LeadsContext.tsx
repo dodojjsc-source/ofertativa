@@ -90,35 +90,90 @@ export function LeadsProvider({ children }: { children: ReactNode }) {
 
   const addLeads = async (newLeads: Omit<Lead, "id">[]) => {
     try {
-      const dbLeads = newLeads.map((lead) => ({
-        nome: lead.nome,
-        telefone: lead.telefone,
-        email: lead.email,
-        campanha_id: lead.campanhaId,
-        corretor_id: lead.corretorId,
-        gestor_id: lead.gestorId,
-        status: lead.status,
-        feedback: lead.feedback,
-        observacao: lead.observacao,
-        repassar_bitrix: lead.repassarBitrix,
-        data_atendimento: lead.dataAtendimento,
-      }));
+      // Verificar duplicatas por telefone + campanha antes de inserir
+      const telefones = newLeads.map(l => l.telefone);
+      const campanhaId = newLeads[0]?.campanhaId;
+      
+      if (campanhaId) {
+        const { data: existingLeads } = await supabase
+          .from("leads")
+          .select("telefone")
+          .eq("campanha_id", campanhaId)
+          .in("telefone", telefones);
+        
+        const existingPhones = new Set(existingLeads?.map(l => l.telefone) || []);
+        const uniqueLeads = newLeads.filter(l => !existingPhones.has(l.telefone));
+        
+        if (uniqueLeads.length === 0) {
+          toast({
+            title: "Aviso",
+            description: "Todos os leads já existem nesta campanha",
+            variant: "destructive",
+          });
+          return;
+        }
 
-      const { error } = await supabase.from("leads").insert(dbLeads);
+        const dbLeads = uniqueLeads.map((lead) => ({
+          nome: lead.nome,
+          telefone: lead.telefone,
+          email: lead.email,
+          campanha_id: lead.campanhaId,
+          corretor_id: lead.corretorId,
+          gestor_id: lead.gestorId,
+          status: lead.status,
+          feedback: lead.feedback,
+          observacao: lead.observacao,
+          repassar_bitrix: lead.repassarBitrix,
+          data_atendimento: lead.dataAtendimento,
+        }));
 
-      if (error) throw error;
+        const { error } = await supabase.from("leads").insert(dbLeads);
 
-      await loadLeads();
-      toast({
-        title: "Sucesso",
-        description: `${newLeads.length} lead(s) adicionado(s) com sucesso`,
-      });
+        if (error) throw error;
+
+        await loadLeads();
+
+        const duplicatesCount = newLeads.length - uniqueLeads.length;
+        toast({
+          title: "Leads adicionados",
+          description: `${uniqueLeads.length} lead(s) adicionado(s)${
+            duplicatesCount > 0 ? ` (${duplicatesCount} duplicatas ignoradas)` : ""
+          }`,
+        });
+      } else {
+        // Sem campanha, inserir todos
+        const dbLeads = newLeads.map((lead) => ({
+          nome: lead.nome,
+          telefone: lead.telefone,
+          email: lead.email,
+          campanha_id: lead.campanhaId,
+          corretor_id: lead.corretorId,
+          gestor_id: lead.gestorId,
+          status: lead.status,
+          feedback: lead.feedback,
+          observacao: lead.observacao,
+          repassar_bitrix: lead.repassarBitrix,
+          data_atendimento: lead.dataAtendimento,
+        }));
+
+        const { error } = await supabase.from("leads").insert(dbLeads);
+
+        if (error) throw error;
+
+        await loadLeads();
+        toast({
+          title: "Sucesso",
+          description: `${newLeads.length} lead(s) adicionado(s) com sucesso`,
+        });
+      }
     } catch (error: any) {
+      console.error("Erro ao adicionar leads:", error);
       toast({
         title: "Erro",
         description: error.message || "Não foi possível adicionar os leads",
         variant: "destructive",
       });
+      throw error;
     }
   };
 
