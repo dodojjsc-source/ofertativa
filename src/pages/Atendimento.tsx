@@ -117,6 +117,8 @@ export default function Atendimento() {
       if (feedback === 'optout') {
         setIsProcessing(true);
         try {
+          console.log('Iniciando opt-out para lead:', currentLead.id);
+          
           const { data, error } = await supabase.functions.invoke('move-to-optout', {
             body: { 
               leadId: currentLead.id,
@@ -124,7 +126,12 @@ export default function Atendimento() {
             }
           });
           
-          if (error) throw error;
+          console.log('Resposta da função move-to-optout:', { data, error });
+          
+          if (error) {
+            console.error('Erro retornado pela função:', error);
+            throw error;
+          }
           
           toast({
             title: "Opt-out registrado",
@@ -135,11 +142,12 @@ export default function Atendimento() {
           loadNextLead(currentLead.id);
           resetForm();
           return;
-        } catch (error) {
+        } catch (error: any) {
           console.error('Erro ao processar opt-out:', error);
+          console.error('Stack trace:', error?.stack);
           toast({
-            title: "Erro",
-            description: "Não foi possível processar o opt-out",
+            title: "Erro ao processar opt-out",
+            description: error?.message || "Não foi possível processar o opt-out",
             variant: "destructive",
           });
           return;
