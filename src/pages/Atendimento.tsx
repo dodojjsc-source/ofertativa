@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Phone, PhoneOff, User, Mail, FolderOpen } from "lucide-react";
+import { Phone, PhoneOff, User, Mail, FolderOpen, XCircle } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 
 export default function Atendimento() {
@@ -167,6 +167,27 @@ export default function Atendimento() {
     setRepassarBitrix(false);
   };
 
+  const handleNumeroErrado = async () => {
+    if (!currentLead) return;
+    
+    // Remover lead do corretor e marcar como número errado
+    await updateLead(currentLead.id, {
+      status: "nao_atendido",
+      feedback: "optout",
+      observacao: "Número errado - removido automaticamente",
+      corretorId: null,
+      dataAtendimento: new Date().toISOString(),
+    });
+    
+    toast({
+      title: "Número marcado como errado",
+      description: "Lead removido da sua lista",
+    });
+    
+    // Avançar imediatamente para o próximo lead
+    loadNextLead(currentLead.id);
+  };
+
   if (!currentLead) {
     return (
       <Layout>
@@ -231,18 +252,31 @@ export default function Atendimento() {
               </div>
             </div>
 
-            <div className="flex gap-4">
-              <Button onClick={handleAtendeu} className="flex-1" size="lg">
-                <Phone className="mr-2 h-5 w-5" />
-                Atendeu
-              </Button>
-              <Button onClick={handleNaoAtendeu} variant="outline" className="flex-1" size="lg">
-                <PhoneOff className="mr-2 h-5 w-5" />
-                Não Atendeu
-              </Button>
-              <Button onClick={() => loadNextLead(currentLead?.id)} variant="secondary" className="flex-1" size="lg">
-                Atender próximo Lead
-              </Button>
+            <div className="flex flex-col gap-4">
+              <div className="flex gap-4">
+                <Button onClick={handleAtendeu} className="flex-1" size="lg">
+                  <Phone className="mr-2 h-5 w-5" />
+                  Atendeu
+                </Button>
+                <Button onClick={handleNaoAtendeu} variant="outline" className="flex-1" size="lg">
+                  <PhoneOff className="mr-2 h-5 w-5" />
+                  Não Atendeu
+                </Button>
+              </div>
+              <div className="flex gap-4">
+                <Button 
+                  onClick={handleNumeroErrado} 
+                  variant="destructive" 
+                  className="flex-1" 
+                  size="lg"
+                >
+                  <XCircle className="mr-2 h-5 w-5" />
+                  Número Errado
+                </Button>
+                <Button onClick={() => loadNextLead(currentLead?.id)} variant="secondary" className="flex-1" size="lg">
+                  Atender próximo Lead
+                </Button>
+              </div>
             </div>
           </CardContent>
         </Card>

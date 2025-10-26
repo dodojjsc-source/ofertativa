@@ -23,6 +23,7 @@ import Historico from "./pages/Historico";
 import FilaBitrix from "./pages/FilaBitrix";
 import Usuarios from "./pages/Usuarios";
 import Campanhas from "./pages/Campanhas";
+import CampanhaLeads from "./pages/CampanhaLeads";
 import AcceptInvite from "./pages/AcceptInvite";
 import NotFound from "./pages/NotFound";
 
@@ -115,6 +116,14 @@ const App = () => (
                         element={
                           <ProtectedRoute allowedRoles={["admin", "gestor"]}>
                             <Campanhas />
+                          </ProtectedRoute>
+                        }
+                      />
+                      <Route
+                        path="/campanhas/:campanhaId/leads"
+                        element={
+                          <ProtectedRoute allowedRoles={["admin", "gestor"]}>
+                            <CampanhaLeads />
                           </ProtectedRoute>
                         }
                       />

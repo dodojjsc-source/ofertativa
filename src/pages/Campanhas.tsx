@@ -3,15 +3,20 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Plus, PackageOpen } from "lucide-react";
+import { Plus, PackageOpen, Edit, Trash2, Eye, MoreVertical } from "lucide-react";
 import { useCampanhas } from "@/contexts/CampanhasContext";
 import { useLeads } from "@/contexts/LeadsContext";
 import { useNavigate } from "react-router-dom";
 import { useState } from "react";
 import { DistribuirLoteDialog } from "@/components/campanhas/DistribuirLoteDialog";
+import { EditarCampanhaDialog } from "@/components/campanhas/EditarCampanhaDialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "@/hooks/use-toast";
 
 export default function Campanhas() {
-  const { campanhas, loading } = useCampanhas();
+  const { campanhas, loading, getCampanhas } = useCampanhas();
   const { leads } = useLeads();
   const navigate = useNavigate();
   const [modalAberto, setModalAberto] = useState(false);
@@ -20,6 +25,9 @@ export default function Campanhas() {
     nome: string;
     disponiveis: number;
   } | null>(null);
+  const [campanhaParaEditar, setCampanhaParaEditar] = useState<{ id: string; nome: string } | null>(null);
+  const [modalEdicaoAberto, setModalEdicaoAberto] = useState(false);
+  const [campanhaParaDeletar, setCampanhaParaDeletar] = useState<string | null>(null);
 
   const getCampanhaStats = (campanhaId: string) => {
     const campanhaLeads = leads.filter(l => l.campanhaId === campanhaId);
@@ -40,6 +48,41 @@ export default function Campanhas() {
       disponiveis: stats.disponiveis
     });
     setModalAberto(true);
+  };
+
+  const abrirModalEdicao = (campanha: any) => {
+    setCampanhaParaEditar({ id: campanha.id, nome: campanha.nome });
+    setModalEdicaoAberto(true);
+  };
+
+  const handleConfirmarDelecao = async () => {
+    if (!campanhaParaDeletar) return;
+    
+    // Deletar todos os leads da campanha primeiro
+    const { error: leadsError } = await supabase
+      .from("leads")
+      .delete()
+      .eq("campanha_id", campanhaParaDeletar);
+    
+    if (leadsError) {
+      toast({ title: "Erro ao deletar leads", variant: "destructive" });
+      return;
+    }
+    
+    // Deletar a campanha
+    const { error } = await supabase
+      .from("campanhas")
+      .delete()
+      .eq("id", campanhaParaDeletar);
+    
+    if (error) {
+      toast({ title: "Erro ao deletar campanha", variant: "destructive" });
+    } else {
+      toast({ title: "Campanha deletada com sucesso" });
+      await getCampanhas();
+    }
+    
+    setCampanhaParaDeletar(null);
   };
 
   return (
@@ -118,14 +161,40 @@ export default function Campanhas() {
                           </div>
                         </TableCell>
                         <TableCell className="text-right">
-                          <Button 
-                            variant="ghost" 
-                            size="sm"
-                            disabled={stats.disponiveis === 0}
-                            onClick={() => abrirModalDistribuicao(campanha, stats)}
-                          >
-                            Distribuir Lote
-                          </Button>
+                          <div className="flex justify-end gap-2">
+                            <Button 
+                              variant="outline" 
+                              size="sm"
+                              disabled={stats.disponiveis === 0}
+                              onClick={() => abrirModalDistribuicao(campanha, stats)}
+                            >
+                              Distribuir Lote
+                            </Button>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="sm">
+                                  <MoreVertical className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={() => navigate(`/campanhas/${campanha.id}/leads`)}>
+                                  <Eye className="mr-2 h-4 w-4" />
+                                  Ver Leads
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => abrirModalEdicao(campanha)}>
+                                  <Edit className="mr-2 h-4 w-4" />
+                                  Editar
+                                </DropdownMenuItem>
+                                <DropdownMenuItem 
+                                  onClick={() => setCampanhaParaDeletar(campanha.id)}
+                                  className="text-destructive"
+                                >
+                                  <Trash2 className="mr-2 h-4 w-4" />
+                                  Deletar
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
                         </TableCell>
                       </TableRow>
                     );
@@ -148,6 +217,34 @@ export default function Campanhas() {
             }}
           />
         )}
+
+        {campanhaParaEditar && (
+          <EditarCampanhaDialog
+            campanha={campanhaParaEditar}
+            open={modalEdicaoAberto}
+            onOpenChange={(open) => {
+              setModalEdicaoAberto(open);
+              if (!open) setCampanhaParaEditar(null);
+            }}
+          />
+        )}
+
+        <AlertDialog open={!!campanhaParaDeletar} onOpenChange={() => setCampanhaParaDeletar(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Confirmar Exclusão</AlertDialogTitle>
+              <AlertDialogDescription>
+                Esta ação não pode ser desfeita. Todos os leads desta campanha também serão deletados.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+              <AlertDialogAction onClick={handleConfirmarDelecao} className="bg-destructive hover:bg-destructive/90">
+                Deletar
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </Layout>
   );
