@@ -66,15 +66,32 @@ export default function Atendimento() {
 
   const handleNaoAtendeu = async () => {
     if (currentLead) {
-      const tentativasAtuais = currentLead.tentativasContato || 0;
+      // Buscar valor atual do banco para evitar dessincronia
+      const { data: leadAtual, error } = await supabase
+        .from('leads')
+        .select('tentativas_contato')
+        .eq('id', currentLead.id)
+        .single();
+
+      if (error) {
+        console.error('Erro ao buscar tentativas:', error);
+        toast({
+          title: "Erro",
+          description: "Não foi possível processar a tentativa",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const tentativasAtuais = leadAtual?.tentativas_contato || 0;
       const novasTentativas = tentativasAtuais + 1;
 
       if (novasTentativas >= 3) {
-        // 3ª tentativa ou mais: liberar lead para redistribuição
+        // 3ª tentativa: liberar lead para redistribuição
         await updateLead(currentLead.id, {
-          status: "pendente", // Mantém como pendente para aparecer como disponível
-          corretorId: null, // Remove o corretor (volta para pool)
-          tentativasContato: 0, // Reseta contador
+          status: "pendente",
+          corretorId: null, // Remove corretor (volta para pool)
+          tentativasContato: 3, // Marca 3 tentativas
           dataAtendimento: new Date().toISOString(),
         });
         
@@ -83,11 +100,11 @@ export default function Atendimento() {
           description: "Após 3 tentativas, o lead foi devolvido ao pool da campanha",
         });
       } else {
-        // 1ª ou 2ª tentativa: manter pendente para o mesmo corretor e enviar para fim da fila
+        // 1ª ou 2ª tentativa: manter com o corretor
         await updateLead(currentLead.id, {
           status: "pendente",
           tentativasContato: novasTentativas,
-          dataAtendimento: new Date().toISOString(), // Envia para fim da fila
+          dataAtendimento: new Date().toISOString(),
         });
         
         toast({
@@ -96,7 +113,6 @@ export default function Atendimento() {
         });
       }
 
-      // Avanço imediato para o próximo lead
       loadNextLead(currentLead.id);
       resetForm();
     }
@@ -113,29 +129,35 @@ export default function Atendimento() {
     }
 
     if (currentLead && user) {
-      // Se for opt-out, mover para lista separada
+      // Se for opt-out, registrar como atendimento ANTES de mover
       if (feedback === 'optout') {
         setIsProcessing(true);
         try {
-          console.log('Iniciando opt-out para lead:', currentLead.id);
+          // 1. PRIMEIRO: Registrar como atendido para contabilizar nas métricas
+          await updateLead(currentLead.id, {
+            status: "atendido",
+            feedback: 'optout',
+            observacao,
+            dataAtendimento: new Date().toISOString(),
+            tentativasContato: 0,
+          });
           
-          const { data, error } = await supabase.functions.invoke('move-to-optout', {
+          // 2. DEPOIS: Mover para lista de opt-out
+          const { error } = await supabase.functions.invoke('move-to-optout', {
             body: { 
               leadId: currentLead.id,
               observacao: observacao
             }
           });
           
-          console.log('Resposta da função move-to-optout:', { data, error });
-          
           if (error) {
-            console.error('Erro retornado pela função:', error);
-            throw error;
+            console.error('Erro ao mover para opt-out:', error);
+            // Mesmo com erro ao mover, o feedback já foi registrado
           }
           
           toast({
             title: "Opt-out registrado",
-            description: "Contato movido para lista de opt-out",
+            description: "Atendimento contabilizado e contato movido para lista de opt-out",
           });
           
           setShowFeedbackModal(false);
@@ -144,7 +166,6 @@ export default function Atendimento() {
           return;
         } catch (error: any) {
           console.error('Erro ao processar opt-out:', error);
-          console.error('Stack trace:', error?.stack);
           toast({
             title: "Erro ao processar opt-out",
             description: error?.message || "Não foi possível processar o opt-out",
