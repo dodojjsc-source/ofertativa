@@ -69,15 +69,15 @@ export function LeadsProvider({ children }: { children: ReactNode }) {
 
   const loadLeads = async () => {
     try {
-      const { data, error } = await supabase
-        .from("leads")
-        .select(`
-          *,
-          campanhas!campanha_id (nome)
-        `)
-        .not('campanha_id', 'is', null)
-        .order("data_atendimento", { ascending: true, nullsFirst: true })
-        .order("created_at", { ascending: true });
+    const { data, error } = await supabase
+      .from("leads")
+      .select(`
+        *,
+        campanhas:campanha_id (nome)
+      `)
+      .not('campanha_id', 'is', null)
+      .order("data_atendimento", { ascending: true, nullsFirst: true })
+      .order("created_at", { ascending: true });
 
       if (error) throw error;
 
