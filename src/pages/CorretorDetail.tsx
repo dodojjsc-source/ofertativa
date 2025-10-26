@@ -36,7 +36,10 @@ export default function CorretorDetail() {
 
   const corretorLeads = leads.filter(l => l.corretorId === id);
   const atendimentos = corretorLeads.filter(l => l.status === "atendido").length;
-  const naoAtendimentos = corretorLeads.filter(l => l.status === "nao_atendido").length;
+  const naoAtendimentos = corretorLeads.reduce((acc, l) => {
+    if (l.status === "atendido") return acc;
+    return acc + (l.tentativasContato || 0);
+  }, 0);
   const ligacoes = atendimentos + naoAtendimentos;
   const taxaSucesso = ligacoes > 0 ? (atendimentos / ligacoes) * 100 : 0;
   const filaPendente = queue.filter(q => q.corretorId === id && q.statusFila === "pendente").length;

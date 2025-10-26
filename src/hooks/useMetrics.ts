@@ -168,10 +168,17 @@ export function useMetrics(filters: Filters) {
     // KPIs gerais (contando opt-out como atendimento)
     const atendimentosBase = filteredLeads.filter(l => l.status === "atendido").length;
     const atendimentos = atendimentosBase + (includeOptouts ? filteredOptouts.length : 0);
-    const naoAtendimentos = filteredLeads.filter(l => 
-      l.status === "nao_atendido" ||
-      (l.status === "pendente" && (l.tentativasContato || 0) > 0 && inRange(l.dataAtendimento))
-    ).length;
+    const naoAtendimentos = filteredLeads.reduce((acc, l) => {
+      if (l.status === "atendido") return acc;
+      const attempts = l.tentativasContato || 0;
+      if (attempts <= 0) return acc;
+      // com filtro de data ativo, respeitar a janela via dataAtendimento
+      if (filters.startDate && filters.endDate) {
+        if (!l.dataAtendimento) return acc;
+        if (!inRange(l.dataAtendimento)) return acc;
+      }
+      return acc + attempts;
+    }, 0);
     const ligacoes = atendimentos + naoAtendimentos;
     const taxaSucesso = ligacoes > 0 ? (atendimentos / ligacoes) * 100 : 0;
     const filaPendente = queue.filter(q => q.statusFila === "pendente").length;
@@ -225,10 +232,16 @@ export function useMetrics(filters: Filters) {
       const corretorAtendimentosLeads = corretorLeads.filter(l => l.status === "atendido").length;
       const corretorOptouts = includeOptouts ? filteredOptouts.filter(o => o.corretorId === corretor.id).length : 0;
       const corretorAtendimentos = corretorAtendimentosLeads + corretorOptouts;
-      const corretorNaoAtendimentos = corretorLeads.filter(l => 
-        l.status === "nao_atendido" ||
-        (l.status === "pendente" && (l.tentativasContato || 0) > 0 && inRange(l.dataAtendimento))
-      ).length;
+      const corretorNaoAtendimentos = corretorLeads.reduce((acc, l) => {
+        if (l.status === "atendido") return acc;
+        const attempts = l.tentativasContato || 0;
+        if (attempts <= 0) return acc;
+        if (filters.startDate && filters.endDate) {
+          if (!l.dataAtendimento) return acc;
+          if (!inRange(l.dataAtendimento)) return acc;
+        }
+        return acc + attempts;
+      }, 0);
       const corretorLigacoes = corretorAtendimentos + corretorNaoAtendimentos;
       const corretorTaxaSucesso = corretorLigacoes > 0 
         ? (corretorAtendimentos / corretorLigacoes) * 100 
