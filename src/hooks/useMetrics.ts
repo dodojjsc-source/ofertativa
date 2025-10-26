@@ -1,10 +1,11 @@
-import { useMemo } from "react";
+import { useMemo, useEffect, useState } from "react";
 import { useLeads, Lead } from "@/contexts/LeadsContext";
 import { useAssignments } from "@/contexts/AssignmentsContext";
 import { useBitrixQueue } from "@/contexts/BitrixQueueContext";
 import { useUsers } from "@/contexts/UsersContext";
 import { Filters } from "@/contexts/FiltersContext";
 import { format, subDays, startOfDay, endOfDay, parseISO } from "date-fns";
+import { supabase } from "@/integrations/supabase/client";
 
 export interface CorretorMetrics {
   corretorId: string;
@@ -47,6 +48,43 @@ export function useMetrics(filters: Filters) {
   const { queue } = useBitrixQueue();
   const { users } = useUsers();
 
+  interface Optout {
+    id: string;
+    flaggedAt: string;
+    corretorId: string | null;
+    gestorId: string | null;
+    campanhaId: string | null;
+  }
+
+  const [optouts, setOptouts] = useState<Optout[]>([]);
+
+  useEffect(() => {
+    const fetchOptouts = async () => {
+      let query = supabase
+        .from('optout_contacts')
+        .select('id, flagged_at, corretor_id, gestor_id, campanha_id');
+
+      if (filters.startDate) query = query.gte('flagged_at', filters.startDate);
+      if (filters.endDate) query = query.lte('flagged_at', filters.endDate);
+
+      const { data, error } = await query;
+      if (error) {
+        console.error('Erro ao buscar opt-outs:', error);
+        setOptouts([]);
+        return;
+      }
+      setOptouts((data || []).map((d: any) => ({
+        id: d.id,
+        flaggedAt: d.flagged_at,
+        corretorId: d.corretor_id,
+        gestorId: d.gestor_id,
+        campanhaId: d.campanha_id,
+      })));
+    };
+
+    fetchOptouts();
+  }, [filters.startDate, filters.endDate]);
+
   return useMemo(() => {
     // Aplicar filtros aos leads
     let filteredLeads = leads;
@@ -77,8 +115,15 @@ export function useMetrics(filters: Filters) {
       });
     }
 
-    // KPIs gerais
-    const atendimentos = filteredLeads.filter(l => l.status === "atendido").length;
+    // Opt-outs filtrados conforme filtros aplicados
+    let filteredOptouts = optouts;
+    if (filters.gestorId) filteredOptouts = filteredOptouts.filter(o => o.gestorId === filters.gestorId);
+    if (filters.corretorId) filteredOptouts = filteredOptouts.filter(o => o.corretorId === filters.corretorId);
+    // Nota: filtro por campanha por nome não é aplicável aqui (dados têm apenas campanhaId)
+
+    // KPIs gerais (contando opt-out como atendimento)
+    const atendimentosBase = filteredLeads.filter(l => l.status === "atendido").length;
+    const atendimentos = atendimentosBase + filteredOptouts.length;
     const naoAtendimentos = filteredLeads.filter(l => l.status === "nao_atendido").length;
     const ligacoes = atendimentos + naoAtendimentos;
     const taxaSucesso = ligacoes > 0 ? (atendimentos / ligacoes) * 100 : 0;
@@ -89,9 +134,10 @@ export function useMetrics(filters: Filters) {
     const leadsOntem = filteredLeads.filter(l => 
       l.dataAtendimento?.startsWith(ontem)
     );
+    const optoutsOntem = filteredOptouts.filter(o => o.flaggedAt?.startsWith(ontem)).length;
     const ligacoesOntem = leadsOntem.filter(l => 
       l.status === "atendido" || l.status === "nao_atendido"
-    ).length;
+    ).length + optoutsOntem;
     const variacaoDia = ligacoesOntem > 0 
       ? ((ligacoes - ligacoesOntem) / ligacoesOntem) * 100 
       : 0;
@@ -102,9 +148,10 @@ export function useMetrics(filters: Filters) {
       if (!l.dataAtendimento) return false;
       return l.dataAtendimento >= seteDiasAtras;
     });
+    const optouts7Dias = filteredOptouts.filter(o => o.flaggedAt >= seteDiasAtras).length;
     const ligacoes7Dias = leads7Dias.filter(l => 
       l.status === "atendido" || l.status === "nao_atendido"
-    ).length;
+    ).length + optouts7Dias;
     const variacao7Dias = ligacoes7Dias > 0 
       ? ((ligacoes - (ligacoes7Dias / 7)) / (ligacoes7Dias / 7)) * 100 
       : 0;
@@ -112,18 +159,21 @@ export function useMetrics(filters: Filters) {
     // Sparkline data (últimos 7 dias)
     const sparklineData = Array.from({ length: 7 }, (_, i) => {
       const date = format(subDays(new Date(), 6 - i), "yyyy-MM-dd");
-      const count = filteredLeads.filter(l => 
+      const countLeads = filteredLeads.filter(l => 
         l.dataAtendimento?.startsWith(date) &&
         (l.status === "atendido" || l.status === "nao_atendido")
       ).length;
-      return { date, value: count };
+      const countOptouts = filteredOptouts.filter(o => o.flaggedAt?.startsWith(date)).length;
+      return { date, value: countLeads + countOptouts };
     });
 
     // Métricas por corretor
     const corretores = users.filter(u => u.role === "corretor" && u.status === "ativo");
     const rankingCorretores: CorretorMetrics[] = corretores.map(corretor => {
       const corretorLeads = filteredLeads.filter(l => l.corretorId === corretor.id);
-      const corretorAtendimentos = corretorLeads.filter(l => l.status === "atendido").length;
+      const corretorAtendimentosLeads = corretorLeads.filter(l => l.status === "atendido").length;
+      const corretorOptouts = filteredOptouts.filter(o => o.corretorId === corretor.id).length;
+      const corretorAtendimentos = corretorAtendimentosLeads + corretorOptouts;
       const corretorNaoAtendimentos = corretorLeads.filter(l => l.status === "nao_atendido").length;
       const corretorLigacoes = corretorAtendimentos + corretorNaoAtendimentos;
       const corretorTaxaSucesso = corretorLigacoes > 0 
@@ -138,20 +188,22 @@ export function useMetrics(filters: Filters) {
 
       // Pacing hoje
       const hoje = format(new Date(), "yyyy-MM-dd");
-      const ligacoesHoje = corretorLeads.filter(l => 
+      const ligacoesHojeLeads = corretorLeads.filter(l => 
         l.dataAtendimento?.startsWith(hoje) &&
         (l.status === "atendido" || l.status === "nao_atendido")
       ).length;
+      const ligacoesHojeOptouts = filteredOptouts.filter(o => o.corretorId === corretor.id && o.flaggedAt?.startsWith(hoje)).length;
+      const ligacoesHoje = ligacoesHojeLeads + ligacoesHojeOptouts;
       const metaDiaria = corretor.metaDiaria || 60;
       const pacingHoje = (ligacoesHoje / metaDiaria) * 100;
 
-      // Percentual do lote
+      // Percentual do lote (contando opt-out como concluído)
       const atribuidosLote = assignments.filter(a => 
         a.corretorId === corretor.id && a.statusDistribuicao === "pendente"
       ).length;
       const concluidosLote = corretorLeads.filter(l => 
         l.status === "atendido" || l.status === "nao_atendido"
-      ).length;
+      ).length + corretorOptouts;
       const percentualLote = atribuidosLote > 0 
         ? (concluidosLote / atribuidosLote) * 100 
         : 0;
@@ -184,18 +236,19 @@ export function useMetrics(filters: Filters) {
       bitrix: c.repassarBitrix,
     }));
 
-    // Time series data (últimos 7 ou 30 dias)
+    // Time series data (últimos 7 dias)
     const timeSeriesData: TimeSeriesData[] = Array.from({ length: 7 }, (_, i) => {
       const date = format(subDays(new Date(), 6 - i), "yyyy-MM-dd");
       const data: TimeSeriesData = { date };
       
       corretores.forEach(corretor => {
-        const count = filteredLeads.filter(l => 
+        const countLeads = filteredLeads.filter(l => 
           l.corretorId === corretor.id &&
           l.dataAtendimento?.startsWith(date) &&
           (l.status === "atendido" || l.status === "nao_atendido")
         ).length;
-        data[corretor.id] = count;
+        const countOptouts = filteredOptouts.filter(o => o.corretorId === corretor.id && o.flaggedAt?.startsWith(date)).length;
+        data[corretor.id] = countLeads + countOptouts;
       });
 
       return data;
@@ -207,16 +260,21 @@ export function useMetrics(filters: Filters) {
     
     for (let day = 0; day < 7; day++) {
       for (let hour = 8; hour < 19; hour++) {
-        const value = filteredLeads.filter(l => {
+        const valueLeads = filteredLeads.filter(l => {
           if (!l.dataAtendimento) return false;
           const date = parseISO(l.dataAtendimento);
+          return date.getDay() === day && date.getHours() === hour;
+        }).length;
+        const valueOptouts = filteredOptouts.filter(o => {
+          if (!o.flaggedAt) return false;
+          const date = parseISO(o.flaggedAt);
           return date.getDay() === day && date.getHours() === hour;
         }).length;
         
         heatmapData.push({
           day: dias[day],
           hour,
-          value,
+          value: valueLeads + valueOptouts,
         });
       }
     }
@@ -224,12 +282,13 @@ export function useMetrics(filters: Filters) {
     // Feedback mix
     const feedbackMix: FeedbackMix[] = rankingCorretores.map(c => {
       const corretorLeads = filteredLeads.filter(l => l.corretorId === c.corretorId);
+      const corretorOptouts = filteredOptouts.filter(o => o.corretorId === c.corretorId).length;
       return {
         corretorId: c.corretorId,
         interessado: corretorLeads.filter(l => l.feedback === "interessado").length,
         agendado: corretorLeads.filter(l => l.feedback === "agendado").length,
         recusou: corretorLeads.filter(l => l.feedback === "recusou").length,
-        optout: corretorLeads.filter(l => l.feedback === "optout").length,
+        optout: corretorLeads.filter(l => l.feedback === "optout").length + corretorOptouts,
       };
     });
 
@@ -244,7 +303,7 @@ export function useMetrics(filters: Filters) {
     const telefones = filteredLeads.map(l => l.telefone);
     const duplicidades = telefones.length - new Set(telefones).size;
 
-    const optouts = filteredLeads.filter(l => l.feedback === "optout").length;
+    const optoutsCount = filteredOptouts.length;
 
     return {
       // KPIs principais
@@ -270,7 +329,7 @@ export function useMetrics(filters: Filters) {
         observacaoAusente,
         observacaoAusentePct,
         duplicidades,
-        optouts,
+        optouts: optoutsCount,
       },
 
       // Tempo médio fila
@@ -284,5 +343,5 @@ export function useMetrics(filters: Filters) {
             }, 0) / queue.filter(q => q.statusFila === "pendente").length
         : 0,
     };
-  }, [leads, assignments, queue, users, filters]);
+  }, [leads, assignments, queue, users, filters, optouts]);
 }

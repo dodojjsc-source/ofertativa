@@ -71,7 +71,7 @@ export default function Atendimento() {
         .from('leads')
         .select('tentativas_contato')
         .eq('id', currentLead.id)
-        .single();
+        .maybeSingle();
 
       if (error) {
         console.error('Erro ao buscar tentativas:', error);
