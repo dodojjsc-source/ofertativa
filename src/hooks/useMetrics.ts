@@ -155,10 +155,23 @@ export function useMetrics(filters: Filters) {
       }
     }
 
+    // Preparar função para checar data dentro do filtro
+    const startRange = filters.startDate ? startOfDay(parseISO(filters.startDate)) : null;
+    const endRange = filters.endDate ? endOfDay(parseISO(filters.endDate)) : null;
+    const inRange = (iso?: string) => {
+      if (!iso) return false;
+      if (!startRange || !endRange) return true;
+      const d = parseISO(iso);
+      return d >= startRange && d <= endRange;
+    };
+
     // KPIs gerais (contando opt-out como atendimento)
     const atendimentosBase = filteredLeads.filter(l => l.status === "atendido").length;
     const atendimentos = atendimentosBase + (includeOptouts ? filteredOptouts.length : 0);
-    const naoAtendimentos = filteredLeads.filter(l => l.status === "nao_atendido").length;
+    const naoAtendimentos = filteredLeads.filter(l => 
+      l.status === "nao_atendido" ||
+      (l.status === "pendente" && (l.tentativasContato || 0) > 0 && inRange(l.dataAtendimento))
+    ).length;
     const ligacoes = atendimentos + naoAtendimentos;
     const taxaSucesso = ligacoes > 0 ? (atendimentos / ligacoes) * 100 : 0;
     const filaPendente = queue.filter(q => q.statusFila === "pendente").length;
@@ -170,7 +183,9 @@ export function useMetrics(filters: Filters) {
     );
     const optoutsOntem = filteredOptouts.filter(o => o.flaggedAt?.startsWith(ontem)).length;
     const ligacoesOntem = leadsOntem.filter(l => 
-      l.status === "atendido" || l.status === "nao_atendido"
+      l.status === "atendido" || 
+      l.status === "nao_atendido" ||
+      (l.status === "pendente" && (l.tentativasContato || 0) > 0)
     ).length + (includeOptouts ? optoutsOntem : 0);
     const variacaoDia = ligacoesOntem > 0 
       ? ((ligacoes - ligacoesOntem) / ligacoesOntem) * 100 
@@ -184,7 +199,9 @@ export function useMetrics(filters: Filters) {
     });
     const optouts7Dias = filteredOptouts.filter(o => o.flaggedAt >= seteDiasAtras).length;
     const ligacoes7Dias = leads7Dias.filter(l => 
-      l.status === "atendido" || l.status === "nao_atendido"
+      l.status === "atendido" || 
+      l.status === "nao_atendido" ||
+      (l.status === "pendente" && (l.tentativasContato || 0) > 0)
     ).length + (includeOptouts ? optouts7Dias : 0);
     const variacao7Dias = ligacoes7Dias > 0 
       ? ((ligacoes - (ligacoes7Dias / 7)) / (ligacoes7Dias / 7)) * 100 
@@ -195,7 +212,7 @@ export function useMetrics(filters: Filters) {
       const date = format(subDays(new Date(), 6 - i), "yyyy-MM-dd");
       const countLeads = filteredLeads.filter(l => 
         l.dataAtendimento?.startsWith(date) &&
-        (l.status === "atendido" || l.status === "nao_atendido")
+        (l.status === "atendido" || l.status === "nao_atendido" || (l.status === "pendente" && (l.tentativasContato || 0) > 0))
       ).length;
       const countOptouts = filteredOptouts.filter(o => o.flaggedAt?.startsWith(date)).length;
       return { date, value: countLeads + (includeOptouts ? countOptouts : 0) };
@@ -208,7 +225,10 @@ export function useMetrics(filters: Filters) {
       const corretorAtendimentosLeads = corretorLeads.filter(l => l.status === "atendido").length;
       const corretorOptouts = includeOptouts ? filteredOptouts.filter(o => o.corretorId === corretor.id).length : 0;
       const corretorAtendimentos = corretorAtendimentosLeads + corretorOptouts;
-      const corretorNaoAtendimentos = corretorLeads.filter(l => l.status === "nao_atendido").length;
+      const corretorNaoAtendimentos = corretorLeads.filter(l => 
+        l.status === "nao_atendido" ||
+        (l.status === "pendente" && (l.tentativasContato || 0) > 0 && inRange(l.dataAtendimento))
+      ).length;
       const corretorLigacoes = corretorAtendimentos + corretorNaoAtendimentos;
       const corretorTaxaSucesso = corretorLigacoes > 0 
         ? (corretorAtendimentos / corretorLigacoes) * 100 
@@ -224,7 +244,7 @@ export function useMetrics(filters: Filters) {
       const hoje = format(new Date(), "yyyy-MM-dd");
       const ligacoesHojeLeads = corretorLeads.filter(l => 
         l.dataAtendimento?.startsWith(hoje) &&
-        (l.status === "atendido" || l.status === "nao_atendido")
+        (l.status === "atendido" || l.status === "nao_atendido" || (l.status === "pendente" && (l.tentativasContato || 0) > 0))
       ).length;
       const ligacoesHojeOptouts = filteredOptouts.filter(o => o.corretorId === corretor.id && o.flaggedAt?.startsWith(hoje)).length;
       const ligacoesHoje = ligacoesHojeLeads + (includeOptouts ? ligacoesHojeOptouts : 0);
@@ -279,7 +299,7 @@ export function useMetrics(filters: Filters) {
         const countLeads = filteredLeads.filter(l => 
           l.corretorId === corretor.id &&
           l.dataAtendimento?.startsWith(date) &&
-          (l.status === "atendido" || l.status === "nao_atendido")
+          (l.status === "atendido" || l.status === "nao_atendido" || (l.status === "pendente" && (l.tentativasContato || 0) > 0))
         ).length;
         const countOptouts = filteredOptouts.filter(o => o.corretorId === corretor.id && o.flaggedAt?.startsWith(date)).length;
         data[corretor.id] = countLeads + (includeOptouts ? countOptouts : 0);
@@ -297,7 +317,13 @@ export function useMetrics(filters: Filters) {
         const valueLeads = filteredLeads.filter(l => {
           if (!l.dataAtendimento) return false;
           const date = parseISO(l.dataAtendimento);
-          return date.getDay() === day && date.getHours() === hour;
+          const matchesSlot = date.getDay() === day && date.getHours() === hour;
+          if (!matchesSlot) return false;
+          return (
+            l.status === "atendido" ||
+            l.status === "nao_atendido" ||
+            (l.status === "pendente" && (l.tentativasContato || 0) > 0)
+          );
         }).length;
         const valueOptouts = filteredOptouts.filter(o => {
           if (!o.flaggedAt) return false;

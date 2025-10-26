@@ -21,7 +21,7 @@ export default function Dashboard() {
     optout: metrics.feedbackMix.reduce((sum, c) => sum + c.optout, 0),
   };
 
-  // Calcular não atendidos (ligações - atendimentos)
+  // Calcular não atendidos com base nas ligações (inclui tentativas registradas)
   const naoAtendidos = metrics.ligacoes - metrics.atendimentos;
 
   return (
