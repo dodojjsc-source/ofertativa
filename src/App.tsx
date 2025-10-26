@@ -25,6 +25,7 @@ import Usuarios from "./pages/Usuarios";
 import Campanhas from "./pages/Campanhas";
 import CampanhaLeads from "./pages/CampanhaLeads";
 import ContatosErrados from "./pages/ContatosErrados";
+import OptoutContacts from "./pages/OptoutContacts";
 import AcceptInvite from "./pages/AcceptInvite";
 import NotFound from "./pages/NotFound";
 
@@ -133,6 +134,14 @@ const App = () => (
                         element={
                           <ProtectedRoute allowedRoles={["admin"]}>
                             <ContatosErrados />
+                          </ProtectedRoute>
+                        }
+                      />
+                      <Route
+                        path="/optout-contacts"
+                        element={
+                          <ProtectedRoute allowedRoles={["admin"]}>
+                            <OptoutContacts />
                           </ProtectedRoute>
                         }
                       />

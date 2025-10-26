@@ -113,6 +113,42 @@ export default function Atendimento() {
     }
 
     if (currentLead && user) {
+      // Se for opt-out, mover para lista separada
+      if (feedback === 'optout') {
+        setIsProcessing(true);
+        try {
+          const { data, error } = await supabase.functions.invoke('move-to-optout', {
+            body: { 
+              leadId: currentLead.id,
+              observacao: observacao
+            }
+          });
+          
+          if (error) throw error;
+          
+          toast({
+            title: "Opt-out registrado",
+            description: "Contato movido para lista de opt-out",
+          });
+          
+          setShowFeedbackModal(false);
+          loadNextLead(currentLead.id);
+          resetForm();
+          return;
+        } catch (error) {
+          console.error('Erro ao processar opt-out:', error);
+          toast({
+            title: "Erro",
+            description: "Não foi possível processar o opt-out",
+            variant: "destructive",
+          });
+          return;
+        } finally {
+          setIsProcessing(false);
+        }
+      }
+
+      // Fluxo normal para outros feedbacks
       await updateLead(currentLead.id, {
         status: "atendido",
         feedback,
