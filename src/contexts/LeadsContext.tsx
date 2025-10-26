@@ -53,6 +53,7 @@ export function LeadsProvider({ children }: { children: ReactNode }) {
           *,
           campanhas (nome)
         `)
+        .not('campanha_id', 'is', null)
         .order("data_atendimento", { ascending: true, nullsFirst: true })
         .order("created_at", { ascending: true });
 
