@@ -143,14 +143,38 @@ export default function Upload() {
         };
       });
 
-      setImportedLeads(parsedLeads);
-      const description = multiplePhoneCount > 0
-        ? `${parsedLeads.length} leads encontrados. ${multiplePhoneCount} linha(s) com múltiplos telefones — importamos o primeiro número válido.`
-        : `${parsedLeads.length} leads encontrados na planilha`;
+      // Remover duplicatas dentro da planilha (manter primeira ocorrência)
+      const phoneSet = new Set<string>();
+      const uniqueParsedLeads: typeof parsedLeads = [];
+      let duplicatesInFile = 0;
+
+      for (const lead of parsedLeads) {
+        if (phoneSet.has(lead.telefone)) {
+          duplicatesInFile++;
+          continue;
+        }
+        phoneSet.add(lead.telefone);
+        uniqueParsedLeads.push(lead);
+      }
+
+      setImportedLeads(uniqueParsedLeads);
+
+      // Montar mensagem com informações de duplicatas e múltiplos telefones
+      const descriptionParts: string[] = [
+        `${uniqueParsedLeads.length} leads únicos encontrados`
+      ];
+      
+      if (duplicatesInFile > 0) {
+        descriptionParts.push(`${duplicatesInFile} duplicata(s) removida(s) da planilha`);
+      }
+      
+      if (multiplePhoneCount > 0) {
+        descriptionParts.push(`${multiplePhoneCount} linha(s) com múltiplos telefones — importamos o primeiro número válido`);
+      }
       
       toast({
         title: "Arquivo carregado",
-        description,
+        description: descriptionParts.join('. '),
       });
     } catch (error) {
       console.error("Erro ao processar arquivo:", error);

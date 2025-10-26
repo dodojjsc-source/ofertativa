@@ -113,9 +113,21 @@ export function LeadsProvider({ children }: { children: ReactNode }) {
 
   const addLeads = async (newLeads: Omit<Lead, "id">[]) => {
     try {
+      // Remover duplicatas internas no batch (manter primeira ocorrência)
+      const phoneSet = new Set<string>();
+      const internallyUniqueLeads = newLeads.filter(lead => {
+        if (phoneSet.has(lead.telefone)) {
+          return false;
+        }
+        phoneSet.add(lead.telefone);
+        return true;
+      });
+
+      const internalDuplicates = newLeads.length - internallyUniqueLeads.length;
+
       // Verificar duplicatas por telefone + campanha antes de inserir
-      const telefones = newLeads.map(l => l.telefone);
-      const campanhaId = newLeads[0]?.campanhaId;
+      const telefones = internallyUniqueLeads.map(l => l.telefone);
+      const campanhaId = internallyUniqueLeads[0]?.campanhaId;
       
       if (campanhaId) {
         const { data: existingLeads } = await supabase
@@ -125,7 +137,7 @@ export function LeadsProvider({ children }: { children: ReactNode }) {
           .in("telefone", telefones);
         
         const existingPhones = new Set(existingLeads?.map(l => l.telefone) || []);
-        const uniqueLeads = newLeads.filter(l => !existingPhones.has(l.telefone));
+        const uniqueLeads = internallyUniqueLeads.filter(l => !existingPhones.has(l.telefone));
         
         if (uniqueLeads.length === 0) {
           toast({
@@ -157,15 +169,23 @@ export function LeadsProvider({ children }: { children: ReactNode }) {
         await loadLeads();
 
         const duplicatesCount = newLeads.length - uniqueLeads.length;
+        const descriptionParts: string[] = [`${uniqueLeads.length} lead(s) adicionado(s)`];
+        
+        if (internalDuplicates > 0) {
+          descriptionParts.push(`${internalDuplicates} duplicatas internas removidas`);
+        }
+        
+        if (duplicatesCount - internalDuplicates > 0) {
+          descriptionParts.push(`${duplicatesCount - internalDuplicates} já existiam no banco`);
+        }
+        
         toast({
           title: "Leads adicionados",
-          description: `${uniqueLeads.length} lead(s) adicionado(s)${
-            duplicatesCount > 0 ? ` (${duplicatesCount} duplicatas ignoradas)` : ""
-          }`,
+          description: descriptionParts.join(', '),
         });
       } else {
-        // Sem campanha, inserir todos
-        const dbLeads = newLeads.map((lead) => ({
+        // Sem campanha, inserir todos (usar internallyUniqueLeads)
+        const dbLeads = internallyUniqueLeads.map((lead) => ({
           nome: lead.nome,
           telefone: lead.telefone,
           email: lead.email,
@@ -184,9 +204,15 @@ export function LeadsProvider({ children }: { children: ReactNode }) {
         if (error) throw error;
 
         await loadLeads();
+        
+        const descriptionParts: string[] = [`${internallyUniqueLeads.length} lead(s) adicionado(s) com sucesso`];
+        if (internalDuplicates > 0) {
+          descriptionParts.push(`${internalDuplicates} duplicatas internas removidas`);
+        }
+        
         toast({
           title: "Sucesso",
-          description: `${newLeads.length} lead(s) adicionado(s) com sucesso`,
+          description: descriptionParts.join(', '),
         });
       }
     } catch (error: any) {
