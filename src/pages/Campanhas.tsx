@@ -7,6 +7,7 @@ import { Plus, PackageOpen, Edit, Trash2, Eye, MoreVertical } from "lucide-react
 import { useCampanhas } from "@/contexts/CampanhasContext";
 import { useLeads } from "@/contexts/LeadsContext";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/contexts/AuthContext";
 import { useState } from "react";
 import { DistribuirLoteDialog } from "@/components/campanhas/DistribuirLoteDialog";
 import { EditarCampanhaDialog } from "@/components/campanhas/EditarCampanhaDialog";
@@ -19,6 +20,7 @@ export default function Campanhas() {
   const { campanhas, loading, getCampanhas } = useCampanhas();
   const { leads } = useLeads();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [modalAberto, setModalAberto] = useState(false);
   const [campanhaParaDistribuir, setCampanhaParaDistribuir] = useState<{
     id: string;
@@ -33,7 +35,8 @@ export default function Campanhas() {
     const campanhaLeads = leads.filter(l => l.campanhaId === campanhaId);
     const totalLeads = campanhaLeads.length;
     const atendidos = campanhaLeads.filter(l => l.status === "atendido").length;
-    const disponiveis = campanhaLeads.filter(l => !l.corretorId).length;
+    // Disponíveis: sem corretor E que não sejam optout
+    const disponiveis = campanhaLeads.filter(l => !l.corretorId && l.feedback !== "optout").length;
     const progresso = totalLeads > 0 ? ((atendidos / totalLeads) * 100).toFixed(0) : "0";
     
     return { totalLeads, atendidos, disponiveis, progresso };
@@ -58,25 +61,14 @@ export default function Campanhas() {
   const handleConfirmarDelecao = async () => {
     if (!campanhaParaDeletar) return;
     
-    // Deletar todos os leads da campanha primeiro
-    const { error: leadsError } = await supabase
-      .from("leads")
-      .delete()
-      .eq("campanha_id", campanhaParaDeletar);
-    
-    if (leadsError) {
-      toast({ title: "Erro ao deletar leads", variant: "destructive" });
-      return;
-    }
-    
-    // Deletar a campanha
+    // Deletar apenas a campanha - CASCADE cuida dos filhos automaticamente
     const { error } = await supabase
       .from("campanhas")
       .delete()
       .eq("id", campanhaParaDeletar);
     
     if (error) {
-      toast({ title: "Erro ao deletar campanha", variant: "destructive" });
+      toast({ title: "Erro ao deletar campanha", description: error.message, variant: "destructive" });
     } else {
       toast({ title: "Campanha deletada com sucesso" });
       await getCampanhas();
@@ -161,40 +153,44 @@ export default function Campanhas() {
                           </div>
                         </TableCell>
                         <TableCell className="text-right">
-                          <div className="flex justify-end gap-2">
-                            <Button 
-                              variant="outline" 
-                              size="sm"
-                              disabled={stats.disponiveis === 0}
-                              onClick={() => abrirModalDistribuicao(campanha, stats)}
-                            >
-                              Distribuir Lote
-                            </Button>
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="sm">
-                                  <MoreVertical className="h-4 w-4" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end">
-                                <DropdownMenuItem onClick={() => navigate(`/campanhas/${campanha.id}/leads`)}>
-                                  <Eye className="mr-2 h-4 w-4" />
-                                  Ver Leads
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => abrirModalEdicao(campanha)}>
-                                  <Edit className="mr-2 h-4 w-4" />
-                                  Editar
-                                </DropdownMenuItem>
-                                <DropdownMenuItem 
-                                  onClick={() => setCampanhaParaDeletar(campanha.id)}
-                                  className="text-destructive"
-                                >
-                                  <Trash2 className="mr-2 h-4 w-4" />
-                                  Deletar
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          </div>
+                          {user?.role === "admin" ? (
+                            <div className="flex justify-end gap-2">
+                              <Button 
+                                variant="outline" 
+                                size="sm"
+                                disabled={stats.disponiveis === 0}
+                                onClick={() => abrirModalDistribuicao(campanha, stats)}
+                              >
+                                Distribuir Lote
+                              </Button>
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button variant="ghost" size="sm">
+                                    <MoreVertical className="h-4 w-4" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                  <DropdownMenuItem onClick={() => navigate(`/campanhas/${campanha.id}/leads`)}>
+                                    <Eye className="mr-2 h-4 w-4" />
+                                    Ver Leads
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem onClick={() => abrirModalEdicao(campanha)}>
+                                    <Edit className="mr-2 h-4 w-4" />
+                                    Editar
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem 
+                                    onClick={() => setCampanhaParaDeletar(campanha.id)}
+                                    className="text-destructive"
+                                  >
+                                    <Trash2 className="mr-2 h-4 w-4" />
+                                    Deletar
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </div>
+                          ) : (
+                            <span className="text-sm text-muted-foreground">Apenas visualização</span>
+                          )}
                         </TableCell>
                       </TableRow>
                     );

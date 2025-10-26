@@ -1,11 +1,15 @@
 import { useParams, useNavigate } from "react-router-dom";
 import { Layout } from "@/components/Layout";
 import { Button } from "@/components/ui/button";
+import { useAuth } from "@/contexts/AuthContext";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Edit, Trash2, PackageOpen } from "lucide-react";
+import { ArrowLeft, Edit, Trash2, PackageOpen, Plus } from "lucide-react";
 import { useLeads } from "@/contexts/LeadsContext";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import { useCampanhas } from "@/contexts/CampanhasContext";
 import { useState } from "react";
 import { EditarLeadDialog } from "@/components/campanhas/EditarLeadDialog";
@@ -15,8 +19,9 @@ import { toast } from "@/hooks/use-toast";
 export default function CampanhaLeads() {
   const { campanhaId } = useParams<{ campanhaId: string }>();
   const navigate = useNavigate();
-  const { leads, deleteLead } = useLeads();
+  const { leads, deleteLead, addLeads } = useLeads();
   const { campanhas } = useCampanhas();
+  const { user } = useAuth();
   
   const campanha = campanhas.find(c => c.id === campanhaId);
   const campanhaLeads = leads.filter(l => l.campanhaId === campanhaId);
@@ -24,6 +29,8 @@ export default function CampanhaLeads() {
   const [leadParaEditar, setLeadParaEditar] = useState<any>(null);
   const [modalEdicaoAberto, setModalEdicaoAberto] = useState(false);
   const [leadParaDeletar, setLeadParaDeletar] = useState<string | null>(null);
+  const [modalAdicionarAberto, setModalAdicionarAberto] = useState(false);
+  const [novoLead, setNovoLead] = useState({ nome: "", telefone: "", email: "" });
 
   const handleDeletarLead = async () => {
     if (!leadParaDeletar) return;
@@ -31,6 +38,23 @@ export default function CampanhaLeads() {
     await deleteLead(leadParaDeletar);
     toast({ title: "Lead deletado com sucesso" });
     setLeadParaDeletar(null);
+  };
+
+  const handleAdicionarLead = async () => {
+    if (!novoLead.nome || !novoLead.telefone || !campanhaId) return;
+    
+    await addLeads([{
+      nome: novoLead.nome,
+      telefone: novoLead.telefone,
+      email: novoLead.email || undefined,
+      campanha: campanha?.nome || "",
+      campanhaId,
+      status: "pendente",
+      repassarBitrix: false,
+    }]);
+    
+    setNovoLead({ nome: "", telefone: "", email: "" });
+    setModalAdicionarAberto(false);
   };
 
   const getStatusBadge = (status: string) => {
@@ -55,6 +79,12 @@ export default function CampanhaLeads() {
               <p className="text-muted-foreground">{campanhaLeads.length} leads nesta campanha</p>
             </div>
           </div>
+          {user?.role === "admin" && (
+            <Button onClick={() => setModalAdicionarAberto(true)}>
+              <Plus className="mr-2 h-4 w-4" />
+              Adicionar Lead
+            </Button>
+          )}
         </div>
 
         <Card>
@@ -95,26 +125,30 @@ export default function CampanhaLeads() {
                       <TableCell>{lead.feedback || "-"}</TableCell>
                       <TableCell>{lead.tentativasContato || 0}</TableCell>
                       <TableCell className="text-right">
-                        <div className="flex justify-end gap-2">
-                          <Button 
-                            variant="ghost" 
-                            size="sm"
-                            onClick={() => {
-                              setLeadParaEditar(lead);
-                              setModalEdicaoAberto(true);
-                            }}
-                          >
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                          <Button 
-                            variant="ghost" 
-                            size="sm"
-                            onClick={() => setLeadParaDeletar(lead.id)}
-                            className="text-destructive hover:text-destructive"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
+                        {user?.role === "admin" ? (
+                          <div className="flex justify-end gap-2">
+                            <Button 
+                              variant="ghost" 
+                              size="sm"
+                              onClick={() => {
+                                setLeadParaEditar(lead);
+                                setModalEdicaoAberto(true);
+                              }}
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            <Button 
+                              variant="ghost" 
+                              size="sm"
+                              onClick={() => setLeadParaDeletar(lead.id)}
+                              className="text-destructive hover:text-destructive"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        ) : (
+                          <span className="text-sm text-muted-foreground">-</span>
+                        )}
                       </TableCell>
                     </TableRow>
                   ))
@@ -151,6 +185,58 @@ export default function CampanhaLeads() {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+
+        <Dialog open={modalAdicionarAberto} onOpenChange={setModalAdicionarAberto}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Adicionar Novo Lead</DialogTitle>
+              <DialogDescription>
+                Adicione um novo lead à campanha {campanha?.nome}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="nome">Nome *</Label>
+                <Input
+                  id="nome"
+                  value={novoLead.nome}
+                  onChange={(e) => setNovoLead({ ...novoLead, nome: e.target.value })}
+                  placeholder="Nome do lead"
+                />
+              </div>
+              <div>
+                <Label htmlFor="telefone">Telefone *</Label>
+                <Input
+                  id="telefone"
+                  value={novoLead.telefone}
+                  onChange={(e) => setNovoLead({ ...novoLead, telefone: e.target.value })}
+                  placeholder="(00) 00000-0000"
+                />
+              </div>
+              <div>
+                <Label htmlFor="email">Email</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  value={novoLead.email}
+                  onChange={(e) => setNovoLead({ ...novoLead, email: e.target.value })}
+                  placeholder="email@exemplo.com"
+                />
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={() => setModalAdicionarAberto(false)}>
+                  Cancelar
+                </Button>
+                <Button 
+                  onClick={handleAdicionarLead}
+                  disabled={!novoLead.nome || !novoLead.telefone}
+                >
+                  Adicionar
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
     </Layout>
   );

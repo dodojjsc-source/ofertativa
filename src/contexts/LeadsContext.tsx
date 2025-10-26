@@ -73,7 +73,7 @@ export function LeadsProvider({ children }: { children: ReactNode }) {
         .from("leads")
         .select(`
           *,
-          campanhas (nome)
+          campanhas!campanha_id (nome)
         `)
         .not('campanha_id', 'is', null)
         .order("data_atendimento", { ascending: true, nullsFirst: true })

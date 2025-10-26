@@ -63,12 +63,13 @@ export function DistribuirLoteDialog({
     setProcessando(true);
     
     try {
-      // 1. Buscar leads disponíveis (sem corretor_id)
+      // 1. Buscar leads disponíveis (sem corretor_id e que não sejam optout)
       const { data: leadsDisponiveis, error: fetchError } = await supabase
         .from("leads")
         .select("*")
         .eq("campanha_id", campanhaId)
         .is("corretor_id", null)
+        .or("feedback.is.null,feedback.neq.optout")
         .order("created_at", { ascending: true })
         .limit(totalADistribuir);
 

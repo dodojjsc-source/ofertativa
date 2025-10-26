@@ -16,7 +16,7 @@ import { toast } from "@/hooks/use-toast";
 
 export default function Atendimento() {
   const { user } = useAuth();
-  const { leads, updateLead, deleteLead } = useLeads();
+  const { leads, updateLead } = useLeads();
   const { addToQueue } = useBitrixQueue();
   const { users } = useUsers();
   const [currentLead, setCurrentLead] = useState<any>(null);
@@ -173,12 +173,20 @@ export default function Atendimento() {
     
     setIsProcessing(true);
     try {
-      // Deletar o lead permanentemente da base
-      await deleteLead(currentLead.id);
+      // Remover lead do corretor e marcar como número errado (UPDATE, não DELETE)
+      await updateLead(currentLead.id, {
+        status: "nao_atendido",
+        feedback: "optout",
+        observacao: currentLead.observacao 
+          ? `${currentLead.observacao}\nNúmero errado` 
+          : "Número errado",
+        corretorId: null,
+        dataAtendimento: new Date().toISOString(),
+      });
       
       toast({
         title: "Número marcado como errado",
-        description: "Lead removido permanentemente da base",
+        description: "Lead removido da sua fila",
       });
       
       // Avançar imediatamente para o próximo lead
