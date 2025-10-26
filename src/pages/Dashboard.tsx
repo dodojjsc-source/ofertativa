@@ -156,13 +156,25 @@ export default function Dashboard() {
             <CardContent className="space-y-4">
               <div className="space-y-2">
                 <div className="flex justify-between text-sm">
+                  <span>Pendentes</span>
+                  <span className="font-semibold">{metrics.pendentes}</span>
+                </div>
+                <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-primary"
+                    style={{ width: `${metrics.totalLeads > 0 ? (metrics.pendentes / metrics.totalLeads) * 100 : 0}%` }}
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <div className="flex justify-between text-sm">
                   <span>Atendidos (com Opt-out)</span>
                   <span className="font-semibold">{metrics.atendimentos}</span>
                 </div>
                 <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
                   <div
                     className="h-full bg-primary"
-                    style={{ width: `${metrics.ligacoes > 0 ? (metrics.atendimentos / metrics.ligacoes) * 100 : 0}%` }}
+                    style={{ width: `${metrics.totalLeads > 0 ? (metrics.atendimentos / metrics.totalLeads) * 100 : 0}%` }}
                   />
                 </div>
               </div>
@@ -174,7 +186,7 @@ export default function Dashboard() {
                 <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
                   <div
                     className="h-full bg-primary"
-                    style={{ width: `${metrics.ligacoes > 0 ? (naoAtendidos / metrics.ligacoes) * 100 : 0}%` }}
+                    style={{ width: `${metrics.totalLeads > 0 ? (naoAtendidos / metrics.totalLeads) * 100 : 0}%` }}
                   />
                 </div>
               </div>
@@ -186,7 +198,7 @@ export default function Dashboard() {
                 <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
                   <div
                     className="h-full bg-accent"
-                    style={{ width: `${metrics.ligacoes > 0 ? (metrics.dataQuality.optouts / metrics.ligacoes) * 100 : 0}%` }}
+                    style={{ width: `${metrics.totalLeads > 0 ? (metrics.dataQuality.optouts / metrics.totalLeads) * 100 : 0}%` }}
                   />
                 </div>
               </div>

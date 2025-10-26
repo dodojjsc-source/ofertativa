@@ -339,6 +339,10 @@ export function useMetrics(filters: Filters) {
 
     const optoutsCount = includeOptouts ? filteredOptouts.length : 0;
 
+    // Calcular pendentes e total de leads
+    const pendentes = filteredLeads.filter(l => l.status === "pendente").length;
+    const totalLeads = pendentes + atendimentosBase + naoAtendimentos;
+
     // Debug log para facilitar troubleshooting
     console.debug("📊 useMetrics:", {
       filters,
@@ -347,7 +351,9 @@ export function useMetrics(filters: Filters) {
       includeOptouts,
       ligacoes,
       atendimentos,
-      naoAtendimentos
+      naoAtendimentos,
+      pendentes,
+      totalLeads
     });
 
     return {
@@ -359,6 +365,8 @@ export function useMetrics(filters: Filters) {
       variacaoDia,
       variacao7Dias,
       sparklineData,
+      pendentes,
+      totalLeads,
 
       // Rankings
       rankingCorretores,
