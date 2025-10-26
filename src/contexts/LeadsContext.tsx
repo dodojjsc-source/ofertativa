@@ -69,19 +69,36 @@ export function LeadsProvider({ children }: { children: ReactNode }) {
 
   const loadLeads = async () => {
     try {
-    const { data, error } = await supabase
-      .from("leads")
-      .select(`
-        *,
-        campanhas:campanha_id (nome)
-      `)
-      .not('campanha_id', 'is', null)
-      .order("data_atendimento", { ascending: true, nullsFirst: true })
-      .order("created_at", { ascending: true });
+      // Buscar todos os leads com paginação (limite padrão do Supabase é 1000)
+      let allLeads: any[] = [];
+      let from = 0;
+      const pageSize = 1000;
+      let hasMore = true;
 
-      if (error) throw error;
+      while (hasMore) {
+        const { data, error } = await supabase
+          .from("leads")
+          .select(`
+            *,
+            campanhas:campanha_id (nome)
+          `)
+          .not('campanha_id', 'is', null)
+          .order("data_atendimento", { ascending: true, nullsFirst: true })
+          .order("created_at", { ascending: true })
+          .range(from, from + pageSize - 1);
 
-      const mappedLeads: Lead[] = (data || []).map((lead) => ({
+        if (error) throw error;
+
+        if (data && data.length > 0) {
+          allLeads = [...allLeads, ...data];
+          from += pageSize;
+          hasMore = data.length === pageSize;
+        } else {
+          hasMore = false;
+        }
+      }
+
+      const mappedLeads: Lead[] = allLeads.map((lead) => ({
         id: lead.id,
         nome: lead.nome,
         telefone: lead.telefone,
