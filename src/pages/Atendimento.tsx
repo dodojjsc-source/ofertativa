@@ -16,7 +16,7 @@ import { toast } from "@/hooks/use-toast";
 
 export default function Atendimento() {
   const { user } = useAuth();
-  const { leads, updateLead } = useLeads();
+  const { leads, updateLead, deleteLead } = useLeads();
   const { addToQueue } = useBitrixQueue();
   const { users } = useUsers();
   const [currentLead, setCurrentLead] = useState<any>(null);
@@ -24,6 +24,7 @@ export default function Atendimento() {
   const [feedback, setFeedback] = useState<FeedbackType>("interessado");
   const [observacao, setObservacao] = useState("");
   const [repassarBitrix, setRepassarBitrix] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
 
   useEffect(() => {
     loadNextLead();
@@ -168,24 +169,23 @@ export default function Atendimento() {
   };
 
   const handleNumeroErrado = async () => {
-    if (!currentLead) return;
+    if (!currentLead || isProcessing) return;
     
-    // Remover lead do corretor e marcar como número errado
-    await updateLead(currentLead.id, {
-      status: "nao_atendido",
-      feedback: "optout",
-      observacao: "Número errado - removido automaticamente",
-      corretorId: null,
-      dataAtendimento: new Date().toISOString(),
-    });
-    
-    toast({
-      title: "Número marcado como errado",
-      description: "Lead removido da sua lista",
-    });
-    
-    // Avançar imediatamente para o próximo lead
-    loadNextLead(currentLead.id);
+    setIsProcessing(true);
+    try {
+      // Deletar o lead permanentemente da base
+      await deleteLead(currentLead.id);
+      
+      toast({
+        title: "Número marcado como errado",
+        description: "Lead removido permanentemente da base",
+      });
+      
+      // Avançar imediatamente para o próximo lead
+      loadNextLead(currentLead.id);
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   if (!currentLead) {
@@ -264,15 +264,16 @@ export default function Atendimento() {
                 </Button>
               </div>
               <div className="flex gap-4">
-                <Button 
-                  onClick={handleNumeroErrado} 
-                  variant="destructive" 
-                  className="flex-1" 
-                  size="lg"
-                >
-                  <XCircle className="mr-2 h-5 w-5" />
-                  Número Errado
-                </Button>
+            <Button 
+              onClick={handleNumeroErrado} 
+              variant="destructive" 
+              className="flex-1" 
+              size="lg"
+              disabled={isProcessing}
+            >
+              <XCircle className="mr-2 h-5 w-5" />
+              {isProcessing ? "Processando..." : "Número Errado"}
+            </Button>
                 <Button onClick={() => loadNextLead(currentLead?.id)} variant="secondary" className="flex-1" size="lg">
                   Atender próximo Lead
                 </Button>

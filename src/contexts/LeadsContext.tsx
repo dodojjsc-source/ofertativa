@@ -42,6 +42,28 @@ export function LeadsProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (user) {
       loadLeads();
+
+      // Subscrever a mudanças em tempo real para sincronização automática
+      const channel = supabase
+        .channel('leads-changes')
+        .on(
+          'postgres_changes',
+          {
+            event: '*', // INSERT, UPDATE, DELETE
+            schema: 'public',
+            table: 'leads'
+          },
+          () => {
+            console.log('Leads alterados, recarregando...');
+            loadLeads();
+          }
+        )
+        .subscribe();
+
+      // Cleanup na desmontagem
+      return () => {
+        supabase.removeChannel(channel);
+      };
     }
   }, [user]);
 
