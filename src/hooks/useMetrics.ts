@@ -115,6 +115,10 @@ export function useMetrics(filters: Filters) {
       const start = startOfDay(parseISO(filters.startDate));
       const end = endOfDay(parseISO(filters.endDate));
       filteredLeads = filteredLeads.filter(l => {
+        // Manter TODOS os leads pendentes (não têm dataAtendimento)
+        if (l.status === "pendente") return true;
+        
+        // Para atendidos/não atendidos, aplicar filtro de data
         if (!l.dataAtendimento) return false;
         const date = parseISO(l.dataAtendimento);
         return date >= start && date <= end;
