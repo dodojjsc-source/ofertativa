@@ -5,14 +5,14 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useFilters } from "@/contexts/FiltersContext";
 import { useUsers } from "@/contexts/UsersContext";
-import { useLeads } from "@/contexts/LeadsContext";
+import { useCampanhas } from "@/contexts/CampanhasContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { X } from "lucide-react";
 
 export function FiltersCard() {
   const { filters, setFilters, resetFilters } = useFilters();
   const { users } = useUsers();
-  const { leads } = useLeads();
+  const { campanhas } = useCampanhas();
   const { user } = useAuth();
 
   const gestores = users.filter((u) => u.role === "gestor" && u.status === "ativo");
@@ -20,7 +20,6 @@ export function FiltersCard() {
     ? users.filter((u) => u.role === "corretor" && u.gestorId === filters.gestorId && u.status === "ativo")
     : users.filter((u) => u.role === "corretor" && u.status === "ativo");
 
-  const campanhas = [...new Set(leads.map((l) => l.campanha))];
   const feedbacks = ["interessado", "agendado", "recusou", "optout"];
 
   // Admin pode ver tudo, Gestor só sua equipe
@@ -93,8 +92,8 @@ export function FiltersCard() {
             <SelectContent>
               <SelectItem value="all">Todas</SelectItem>
               {campanhas.map((c) => (
-                <SelectItem key={c} value={c}>
-                  {c}
+                <SelectItem key={c.id} value={c.nome}>
+                  {c.nome}
                 </SelectItem>
               ))}
             </SelectContent>
