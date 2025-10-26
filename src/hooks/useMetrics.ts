@@ -168,16 +168,37 @@ export function useMetrics(filters: Filters) {
     // KPIs gerais (contando opt-out como atendimento)
     const atendimentosBase = filteredLeads.filter(l => l.status === "atendido").length;
     const atendimentos = atendimentosBase + (includeOptouts ? filteredOptouts.length : 0);
+    
+    // Contar TODAS as tentativas registradas, independente do status final
     const naoAtendimentos = filteredLeads.reduce((acc, l) => {
-      if (l.status === "atendido") return acc;
       const attempts = l.tentativasContato || 0;
       if (attempts <= 0) return acc;
-      // com filtro de data ativo, respeitar a janela via dataAtendimento
-      if (filters.startDate && filters.endDate) {
-        if (!l.dataAtendimento) return acc;
-        if (!inRange(l.dataAtendimento)) return acc;
+      
+      // Para leads atendidos: contar tentativas anteriores ao atendimento
+      if (l.status === "atendido" && l.dataAtendimento) {
+        if (filters.startDate && filters.endDate && !inRange(l.dataAtendimento)) {
+          return acc;
+        }
+        return acc + attempts;
       }
-      return acc + attempts;
+      
+      // Para leads nao_atendido: contar todas as tentativas
+      if (l.status === "nao_atendido") {
+        if (filters.startDate && filters.endDate) {
+          if (!l.dataAtendimento || !inRange(l.dataAtendimento)) return acc;
+        }
+        return acc + attempts;
+      }
+      
+      // Para leads pendentes: contar tentativas feitas
+      if (l.status === "pendente" && attempts > 0) {
+        if (filters.startDate && filters.endDate) {
+          if (!l.dataAtendimento || !inRange(l.dataAtendimento)) return acc;
+        }
+        return acc + attempts;
+      }
+      
+      return acc;
     }, 0);
     const ligacoes = atendimentos + naoAtendimentos;
     const taxaSucesso = ligacoes > 0 ? (atendimentos / ligacoes) * 100 : 0;
@@ -232,15 +253,28 @@ export function useMetrics(filters: Filters) {
       const corretorAtendimentosLeads = corretorLeads.filter(l => l.status === "atendido").length;
       const corretorOptouts = includeOptouts ? filteredOptouts.filter(o => o.corretorId === corretor.id).length : 0;
       const corretorAtendimentos = corretorAtendimentosLeads + corretorOptouts;
+      // Contar tentativas de TODOS os leads (atendidos ou não)
       const corretorNaoAtendimentos = corretorLeads.reduce((acc, l) => {
-        if (l.status === "atendido") return acc;
         const attempts = l.tentativasContato || 0;
         if (attempts <= 0) return acc;
-        if (filters.startDate && filters.endDate) {
-          if (!l.dataAtendimento) return acc;
-          if (!inRange(l.dataAtendimento)) return acc;
+        
+        // Para leads atendidos: contar tentativas anteriores ao atendimento
+        if (l.status === "atendido" && l.dataAtendimento) {
+          if (filters.startDate && filters.endDate && !inRange(l.dataAtendimento)) {
+            return acc;
+          }
+          return acc + attempts;
         }
-        return acc + attempts;
+        
+        // Para leads nao_atendido ou pendentes com tentativas
+        if (l.status === "nao_atendido" || (l.status === "pendente" && attempts > 0)) {
+          if (filters.startDate && filters.endDate) {
+            if (!l.dataAtendimento || !inRange(l.dataAtendimento)) return acc;
+          }
+          return acc + attempts;
+        }
+        
+        return acc;
       }, 0);
       const corretorLigacoes = corretorAtendimentos + corretorNaoAtendimentos;
       const corretorTaxaSucesso = corretorLigacoes > 0 
@@ -377,10 +411,12 @@ export function useMetrics(filters: Filters) {
     const duplicidades = telefones.length - new Set(telefones).size;
 
     const optoutsCount = includeOptouts ? filteredOptouts.length : 0;
+    const numerosErrados = filteredLeads.filter(l => l.feedback === "numero_errado").length;
 
     // Calcular pendentes e total de leads
     const pendentes = filteredLeads.filter(l => l.status === "pendente").length;
-    const totalLeads = pendentes + atendimentosBase + naoAtendimentos;
+    // Total = todos os leads filtrados (mantém integridade)
+    const totalLeads = filteredLeads.length;
 
     // Debug log para facilitar troubleshooting
     console.debug("📊 useMetrics:", {
@@ -422,6 +458,7 @@ export function useMetrics(filters: Filters) {
         observacaoAusentePct,
         duplicidades,
         optouts: optoutsCount,
+        numerosErrados,
       },
 
       // Tempo médio fila
