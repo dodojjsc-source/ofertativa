@@ -4,6 +4,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useLeads, FeedbackType } from "@/contexts/LeadsContext";
 import { useBitrixQueue } from "@/contexts/BitrixQueueContext";
 import { useUsers } from "@/contexts/UsersContext";
+import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -173,24 +174,30 @@ export default function Atendimento() {
     
     setIsProcessing(true);
     try {
-      // Remover lead do corretor e marcar como número errado (UPDATE, não DELETE)
-      await updateLead(currentLead.id, {
-        status: "nao_atendido",
-        feedback: "optout",
-        observacao: currentLead.observacao 
-          ? `${currentLead.observacao}\nNúmero errado` 
-          : "Número errado",
-        corretorId: null,
-        dataAtendimento: new Date().toISOString(),
+      // Chamar edge function para mover lead para contatos errados
+      const { data, error } = await supabase.functions.invoke('move-wrong-contact', {
+        body: { 
+          leadId: currentLead.id,
+          observacao: 'Número errado'
+        }
       });
+      
+      if (error) throw error;
       
       toast({
         title: "Número marcado como errado",
-        description: "Lead removido da sua fila",
+        description: "Contato movido para lista de números errados",
       });
       
       // Avançar imediatamente para o próximo lead
       loadNextLead(currentLead.id);
+    } catch (error) {
+      console.error('Erro ao marcar número como errado:', error);
+      toast({
+        title: "Erro",
+        description: "Não foi possível marcar o número como errado",
+        variant: "destructive",
+      });
     } finally {
       setIsProcessing(false);
     }

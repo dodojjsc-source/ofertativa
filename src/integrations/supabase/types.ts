@@ -192,6 +192,54 @@ export type Database = {
           },
         ]
       }
+      contatos_errados: {
+        Row: {
+          campanha_id: string | null
+          corretor_id: string | null
+          created_at: string
+          email: string | null
+          flagged_at: string
+          flagged_by: string | null
+          gestor_id: string | null
+          id: string
+          nome: string
+          observacao: string | null
+          original_lead_id: string
+          reason: string
+          telefone: string
+        }
+        Insert: {
+          campanha_id?: string | null
+          corretor_id?: string | null
+          created_at?: string
+          email?: string | null
+          flagged_at?: string
+          flagged_by?: string | null
+          gestor_id?: string | null
+          id?: string
+          nome: string
+          observacao?: string | null
+          original_lead_id: string
+          reason?: string
+          telefone: string
+        }
+        Update: {
+          campanha_id?: string | null
+          corretor_id?: string | null
+          created_at?: string
+          email?: string | null
+          flagged_at?: string
+          flagged_by?: string | null
+          gestor_id?: string | null
+          id?: string
+          nome?: string
+          observacao?: string | null
+          original_lead_id?: string
+          reason?: string
+          telefone?: string
+        }
+        Relationships: []
+      }
       leads: {
         Row: {
           campanha_id: string | null

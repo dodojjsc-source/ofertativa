@@ -11,6 +11,7 @@ import {
   FolderOpen,
   Send,
   BarChart3,
+  AlertCircle,
   LogOut 
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -34,6 +35,7 @@ export function Layout({ children }: { children: ReactNode }) {
     { path: "/fila-bitrix", label: "Fila Bitrix", icon: Send, roles: ["admin", "gestor"] },
     { path: "/usuarios", label: "Usuários", icon: Users, roles: ["admin"] },
     { path: "/campanhas", label: "Campanhas", icon: FolderOpen, roles: ["admin"] },
+    { path: "/contatos-errados", label: "Contatos Errados", icon: AlertCircle, roles: ["admin"] },
   ];
 
   const filteredNavItems = navItems.filter((item) =>

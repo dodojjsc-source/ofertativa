@@ -1,1 +1,4 @@
 project_id = "bnbyuuxwmpqqtcaibwqw"
+
+[functions.move-wrong-contact]
+verify_jwt = true
