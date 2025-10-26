@@ -3,8 +3,8 @@ import { useLeads, Lead } from "@/contexts/LeadsContext";
 import { useAssignments } from "@/contexts/AssignmentsContext";
 import { useBitrixQueue } from "@/contexts/BitrixQueueContext";
 import { useUsers } from "@/contexts/UsersContext";
-import { useCampanhas } from "@/contexts/CampanhasContext";
 import { Filters } from "@/contexts/FiltersContext";
+import { useCampanhas } from "@/contexts/CampanhasContext";
 import { format, subDays, startOfDay, endOfDay, parseISO } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
 
