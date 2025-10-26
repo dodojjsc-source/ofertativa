@@ -129,35 +129,36 @@ export default function Atendimento() {
     }
 
     if (currentLead && user) {
-      // Se for opt-out, registrar como atendimento ANTES de mover
+      // Se for opt-out, registrar como atendimento e manter na campanha
       if (feedback === 'optout') {
         setIsProcessing(true);
         try {
-          // 1. PRIMEIRO: Registrar como atendido para contabilizar nas métricas
+          // 1. Registrar como atendido com feedback opt-out (MANTÉM na tabela leads)
           await updateLead(currentLead.id, {
             status: "atendido",
             feedback: 'optout',
             observacao,
             dataAtendimento: new Date().toISOString(),
-            tentativasContato: 0,
+            // NÃO reseta tentativas - mantém histórico
           });
           
-          // 2. DEPOIS: Mover para lista de opt-out
+          // 2. COPIAR (não mover) para optout_contacts para auditoria
           const { error } = await supabase.functions.invoke('move-to-optout', {
             body: { 
               leadId: currentLead.id,
-              observacao: observacao
+              observacao: observacao,
+              keepInLeads: true // Flag para NÃO deletar da tabela leads
             }
           });
           
           if (error) {
-            console.error('Erro ao mover para opt-out:', error);
-            // Mesmo com erro ao mover, o feedback já foi registrado
+            console.error('Erro ao copiar para opt-out:', error);
+            // Não bloqueia - feedback já foi registrado
           }
           
           toast({
             title: "Opt-out registrado",
-            description: "Atendimento contabilizado e contato movido para lista de opt-out",
+            description: "Feedback contabilizado e mantido na campanha para análise de qualidade",
           });
           
           setShowFeedbackModal(false);
@@ -184,7 +185,7 @@ export default function Atendimento() {
         observacao,
         repassarBitrix,
         dataAtendimento: new Date().toISOString(),
-        tentativasContato: 0, // Reseta tentativas quando atendeu
+        // NÃO reseta tentativas - mantém histórico de quantas ligações foram necessárias
       });
 
       // Se marcou "Repassar para Bitrix", adicionar à fila
@@ -239,22 +240,34 @@ export default function Atendimento() {
     
     setIsProcessing(true);
     try {
-      // Chamar edge function para mover lead para contatos errados
-      const { data, error } = await supabase.functions.invoke('move-wrong-contact', {
+      // 1. Marcar lead como atendido com feedback "numero_errado" (MANTÉM na campanha)
+      await updateLead(currentLead.id, {
+        status: "atendido",
+        feedback: "numero_errado",
+        observacao: "Número incorreto ou inexistente",
+        dataAtendimento: new Date().toISOString(),
+        // NÃO reseta tentativas - mantém histórico
+      });
+      
+      // 2. COPIAR (não mover) para contatos_errados para auditoria
+      const { error } = await supabase.functions.invoke('move-wrong-contact', {
         body: { 
           leadId: currentLead.id,
-          observacao: 'Número errado'
+          observacao: 'Número errado',
+          keepInLeads: true // Flag para NÃO deletar da tabela leads
         }
       });
       
-      if (error) throw error;
+      if (error) {
+        console.error('Erro ao copiar para contatos errados:', error);
+        // Não bloqueia o fluxo - feedback já foi registrado
+      }
       
       toast({
         title: "Número marcado como errado",
-        description: "Contato movido para lista de números errados",
+        description: "Feedback registrado e mantido na campanha para análise de qualidade",
       });
       
-      // Avançar imediatamente para o próximo lead
       loadNextLead(currentLead.id);
     } catch (error) {
       console.error('Erro ao marcar número como errado:', error);

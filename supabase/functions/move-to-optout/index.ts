@@ -37,7 +37,7 @@ Deno.serve(async (req) => {
     console.log('User authenticated:', user.id)
 
     // Get request body
-    const { leadId, observacao } = await req.json()
+    const { leadId, observacao, keepInLeads = false } = await req.json()
     
     if (!leadId) {
       throw new Error('leadId is required')
@@ -98,20 +98,24 @@ Deno.serve(async (req) => {
       throw new Error('Failed to save opt-out contact')
     }
 
-    console.log('Opt-out contact saved. Deleting lead...')
+    console.log('Opt-out contact saved.')
 
-    // Delete lead from leads table
-    const { error: deleteError } = await supabase
-      .from('leads')
-      .delete()
-      .eq('id', leadId)
+    // APENAS deletar se keepInLeads for false (comportamento padrão mantido)
+    if (!keepInLeads) {
+      console.log('Deleting lead from leads table...')
+      const { error: deleteError } = await supabase
+        .from('leads')
+        .delete()
+        .eq('id', leadId)
 
-    if (deleteError) {
-      console.error('Failed to delete lead:', deleteError)
-      throw new Error('Failed to delete lead')
+      if (deleteError) {
+        console.error('Failed to delete lead:', deleteError)
+        throw new Error('Failed to delete lead')
+      }
+      console.log('Lead deleted successfully')
+    } else {
+      console.log('Lead kept in leads table (keepInLeads=true)')
     }
-
-    console.log('Lead deleted successfully')
 
     return new Response(
       JSON.stringify({ 

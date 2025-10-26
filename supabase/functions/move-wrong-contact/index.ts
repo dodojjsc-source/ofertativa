@@ -35,7 +35,7 @@ Deno.serve(async (req) => {
     console.log('User authenticated:', user.id);
 
     // Parse body
-    const { leadId, observacao } = await req.json();
+    const { leadId, observacao, keepInLeads = false } = await req.json();
     
     if (!leadId) {
       throw new Error('leadId is required');
@@ -96,20 +96,24 @@ Deno.serve(async (req) => {
       throw new Error('Failed to save wrong contact');
     }
 
-    console.log('Wrong contact saved. Deleting lead...');
+    console.log('Wrong contact saved.');
 
-    // Deletar o lead da tabela leads (CASCADE cuidará dos assignments)
-    const { error: deleteError } = await supabase
-      .from('leads')
-      .delete()
-      .eq('id', leadId);
+    // APENAS deletar se keepInLeads for false (comportamento padrão mantido)
+    if (!keepInLeads) {
+      console.log('Deleting lead from leads table...');
+      const { error: deleteError } = await supabase
+        .from('leads')
+        .delete()
+        .eq('id', leadId);
 
-    if (deleteError) {
-      console.error('Error deleting lead:', deleteError);
-      throw new Error('Failed to delete lead');
+      if (deleteError) {
+        console.error('Error deleting lead:', deleteError);
+        throw new Error('Failed to delete lead');
+      }
+      console.log('Lead deleted successfully');
+    } else {
+      console.log('Lead kept in leads table (keepInLeads=true)');
     }
-
-    console.log('Lead deleted successfully');
 
     return new Response(
       JSON.stringify({ 

@@ -447,7 +447,12 @@ export type Database = {
       app_role: "admin" | "gestor" | "corretor"
       assignment_status: "pendente" | "concluido"
       bitrix_status: "pendente" | "processado" | "erro" | "descartado"
-      feedback_type: "interessado" | "agendado" | "recusou" | "optout"
+      feedback_type:
+        | "interessado"
+        | "agendado"
+        | "recusou"
+        | "optout"
+        | "numero_errado"
       lead_status: "pendente" | "atendido" | "nao_atendido"
       user_status: "ativo" | "inativo"
     }
@@ -580,7 +585,13 @@ export const Constants = {
       app_role: ["admin", "gestor", "corretor"],
       assignment_status: ["pendente", "concluido"],
       bitrix_status: ["pendente", "processado", "erro", "descartado"],
-      feedback_type: ["interessado", "agendado", "recusou", "optout"],
+      feedback_type: [
+        "interessado",
+        "agendado",
+        "recusou",
+        "optout",
+        "numero_errado",
+      ],
       lead_status: ["pendente", "atendido", "nao_atendido"],
       user_status: ["ativo", "inativo"],
     },
