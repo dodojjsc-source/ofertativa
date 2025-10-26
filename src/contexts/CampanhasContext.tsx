@@ -65,24 +65,45 @@ export function CampanhasProvider({ children }: { children: ReactNode }) {
 
   const createCampanha = async (nome: string, totalLeads: number): Promise<string | null> => {
     try {
+      // Validação de autenticação
+      if (!user?.id) {
+        throw new Error("Usuário não autenticado");
+      }
+
       const { data, error } = await supabase
         .from("campanhas")
         .insert({
           nome,
           total_leads: totalLeads,
-          gestor_id: user?.id,
+          gestor_id: user.id,
         })
         .select()
         .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error("Erro ao criar campanha:", error);
+        throw error;
+      }
 
       await getCampanhas();
       return data.id;
     } catch (error: any) {
+      console.error("Erro detalhado na criação de campanha:", error);
+      
+      // Mensagens de erro mais específicas
+      let errorMessage = error.message || "Não foi possível criar a campanha";
+      
+      if (error.code === "42501") {
+        errorMessage = "Permissão negada. Verifique suas credenciais de gestor.";
+      } else if (error.message?.includes("violates row-level security policy")) {
+        errorMessage = "Você não tem permissão para criar campanhas. Entre em contato com o administrador.";
+      } else if (error.message === "Usuário não autenticado") {
+        errorMessage = "Sessão expirada. Por favor, faça login novamente.";
+      }
+      
       toast({
         title: "Erro",
-        description: error.message || "Não foi possível criar a campanha",
+        description: errorMessage,
         variant: "destructive",
       });
       return null;

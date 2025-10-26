@@ -53,6 +53,21 @@ export default function Upload() {
   const { addAssignments, getPendingCountByCorretor, getAssignmentsByCampanha, isLeadAssigned, undoLastDistribution } = useAssignments();
   const { createCampanha } = useCampanhas();
   
+  // Validar carregamento do usuário
+  if (!user) {
+    return (
+      <Layout>
+        <div className="container mx-auto p-4">
+          <Card>
+            <CardContent className="pt-6">
+              <p className="text-center text-muted-foreground">Carregando informações do usuário...</p>
+            </CardContent>
+          </Card>
+        </div>
+      </Layout>
+    );
+  }
+  
   const [loteSize, setLoteSize] = useState(20);
   const [campanha, setCampanha] = useState("");
   const [selectedCorretores, setSelectedCorretores] = useState<string[]>([]);
@@ -191,6 +206,16 @@ export default function Upload() {
   const handleUploadOnly = async () => {
     if (isUploading) return;
     
+    // Validar autenticação
+    if (!user?.id) {
+      toast({
+        title: "Erro",
+        description: "Usuário não autenticado. Por favor, faça login novamente.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
     if (!campanha) {
       toast({
         title: "Erro",
@@ -254,6 +279,16 @@ export default function Upload() {
 
   const handleDistribuir = async () => {
     if (isUploading) return;
+    
+    // Validar autenticação
+    if (!user?.id) {
+      toast({
+        title: "Erro",
+        description: "Usuário não autenticado. Por favor, faça login novamente.",
+        variant: "destructive",
+      });
+      return;
+    }
     
     if (!campanha) {
       toast({
