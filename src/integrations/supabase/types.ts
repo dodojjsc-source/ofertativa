@@ -316,6 +316,57 @@ export type Database = {
           },
         ]
       }
+      nao_atendidos: {
+        Row: {
+          campanha_id: string | null
+          campanha_nome: string | null
+          corretor_id: string | null
+          created_at: string
+          email: string | null
+          flagged_at: string
+          flagged_by: string | null
+          gestor_id: string | null
+          id: string
+          nome: string
+          observacao: string | null
+          original_lead_id: string
+          telefone: string
+          tentativas_contato: number
+        }
+        Insert: {
+          campanha_id?: string | null
+          campanha_nome?: string | null
+          corretor_id?: string | null
+          created_at?: string
+          email?: string | null
+          flagged_at?: string
+          flagged_by?: string | null
+          gestor_id?: string | null
+          id?: string
+          nome: string
+          observacao?: string | null
+          original_lead_id: string
+          telefone: string
+          tentativas_contato?: number
+        }
+        Update: {
+          campanha_id?: string | null
+          campanha_nome?: string | null
+          corretor_id?: string | null
+          created_at?: string
+          email?: string | null
+          flagged_at?: string
+          flagged_by?: string | null
+          gestor_id?: string | null
+          id?: string
+          nome?: string
+          observacao?: string | null
+          original_lead_id?: string
+          telefone?: string
+          tentativas_contato?: number
+        }
+        Relationships: []
+      }
       optout_contacts: {
         Row: {
           campanha_id: string | null
@@ -453,6 +504,7 @@ export type Database = {
         | "recusou"
         | "optout"
         | "numero_errado"
+        | "nao_atendeu"
       lead_status: "pendente" | "atendido" | "nao_atendido"
       user_status: "ativo" | "inativo"
     }
@@ -591,6 +643,7 @@ export const Constants = {
         "recusou",
         "optout",
         "numero_errado",
+        "nao_atendeu",
       ],
       lead_status: ["pendente", "atendido", "nao_atendido"],
       user_status: ["ativo", "inativo"],

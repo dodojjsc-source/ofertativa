@@ -13,6 +13,7 @@ import {
   BarChart3,
   AlertCircle,
   UserX,
+  PhoneOff,
   LogOut 
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -38,6 +39,7 @@ export function Layout({ children }: { children: ReactNode }) {
     { path: "/campanhas", label: "Campanhas", icon: FolderOpen, roles: ["admin"] },
     { path: "/contatos-errados", label: "Contatos Errados", icon: AlertCircle, roles: ["admin"] },
     { path: "/optout-contacts", label: "Opt-out", icon: UserX, roles: ["admin"] },
+    { path: "/nao-atendidos", label: "Não Atendidos", icon: PhoneOff, roles: ["admin"] },
   ];
 
   const filteredNavItems = navItems.filter((item) =>

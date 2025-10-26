@@ -26,6 +26,7 @@ import Campanhas from "./pages/Campanhas";
 import CampanhaLeads from "./pages/CampanhaLeads";
 import ContatosErrados from "./pages/ContatosErrados";
 import OptoutContacts from "./pages/OptoutContacts";
+import NaoAtendidos from "./pages/NaoAtendidos";
 import AcceptInvite from "./pages/AcceptInvite";
 import NotFound from "./pages/NotFound";
 
@@ -142,6 +143,14 @@ const App = () => (
                         element={
                           <ProtectedRoute allowedRoles={["admin"]}>
                             <OptoutContacts />
+                          </ProtectedRoute>
+                        }
+                      />
+                      <Route
+                        path="/nao-atendidos"
+                        element={
+                          <ProtectedRoute allowedRoles={["admin"]}>
+                            <NaoAtendidos />
                           </ProtectedRoute>
                         }
                       />

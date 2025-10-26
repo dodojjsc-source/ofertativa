@@ -87,18 +87,49 @@ export default function Atendimento() {
       const novasTentativas = tentativasAtuais + 1;
 
       if (novasTentativas >= 3) {
-        // 3ª tentativa: liberar lead para redistribuição
-        await updateLead(currentLead.id, {
-          status: "pendente",
-          corretorId: null, // Remove corretor (volta para pool)
-          tentativasContato: 3, // Marca 3 tentativas
-          dataAtendimento: new Date().toISOString(),
-        });
-        
-        toast({
-          title: "Lead liberado para redistribuição",
-          description: "Após 3 tentativas, o lead foi devolvido ao pool da campanha",
-        });
+        // 3ª tentativa: marcar como não atendido e arquivar
+        setIsProcessing(true);
+        try {
+          // 1. Marcar lead como não atendido (mantém na campanha)
+          await updateLead(currentLead.id, {
+            status: "nao_atendido",
+            feedback: "nao_atendeu" as FeedbackType,
+            tentativasContato: 3,
+            dataAtendimento: new Date().toISOString(),
+            observacao: "Não atendeu após 3 tentativas",
+            // corretorId continua atribuído para rastreabilidade
+          });
+
+          // 2. Copiar para tabela nao_atendidos (para auditoria)
+          const { error } = await supabase.functions.invoke('move-to-nao-atendidos', {
+            body: { 
+              leadId: currentLead.id,
+              keepInLeads: true // Mantém na campanha
+            }
+          });
+
+          if (error) {
+            console.error('Erro ao copiar para não atendidos:', error);
+            // Não bloqueia - feedback já foi registrado
+          }
+
+          toast({
+            title: "Lead arquivado como Não Atendido",
+            description: "Após 3 tentativas, o lead foi marcado e mantido para análise da campanha",
+          });
+          
+          loadNextLead(currentLead.id);
+          resetForm();
+        } catch (error) {
+          console.error('Erro ao processar não atendido:', error);
+          toast({
+            title: "Erro",
+            description: "Não foi possível processar o lead",
+            variant: "destructive",
+          });
+        } finally {
+          setIsProcessing(false);
+        }
       } else {
         // 1ª ou 2ª tentativa: manter com o corretor
         await updateLead(currentLead.id, {

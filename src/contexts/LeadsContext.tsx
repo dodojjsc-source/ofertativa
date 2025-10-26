@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./AuthContext";
 import { toast } from "@/hooks/use-toast";
 
-export type FeedbackType = "interessado" | "agendado" | "recusou" | "optout" | "numero_errado";
+export type FeedbackType = "interessado" | "agendado" | "recusou" | "optout" | "numero_errado" | "nao_atendeu";
 
 export interface Lead {
   id: string;

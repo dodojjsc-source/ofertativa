@@ -35,8 +35,11 @@ export default function Campanhas() {
     const campanhaLeads = leads.filter(l => l.campanhaId === campanhaId);
     const totalLeads = campanhaLeads.length;
     const atendidos = campanhaLeads.filter(l => l.status === "atendido").length;
-    // Disponíveis: sem corretor E que NÃO sejam atendidos (exclui optout e numero_errado)
-    const disponiveis = campanhaLeads.filter(l => !l.corretorId && l.status !== "atendido").length;
+    // Disponíveis: sem corretor E que sejam realmente pendentes (exclui atendidos e nao_atendidos)
+    const disponiveis = campanhaLeads.filter(l => 
+      !l.corretorId && 
+      l.status === "pendente" // Apenas leads realmente pendentes
+    ).length;
     const progresso = totalLeads > 0 ? ((atendidos / totalLeads) * 100).toFixed(0) : "0";
     
     return { totalLeads, atendidos, disponiveis, progresso };
