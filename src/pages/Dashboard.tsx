@@ -1,66 +1,28 @@
 import { Layout } from "@/components/Layout";
-import { useAuth } from "@/contexts/AuthContext";
-import { useLeads } from "@/contexts/LeadsContext";
 import { useFilters } from "@/contexts/FiltersContext";
+import { useMetrics } from "@/hooks/useMetrics";
 import { FiltersCard } from "@/components/FiltersCard";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Phone, PhoneOff, TrendingUp, Users } from "lucide-react";
 
 export default function Dashboard() {
-  const { user } = useAuth();
-  const { leads, getLeadsByCorretor, getLeadsByGestor } = useLeads();
   const { filters } = useFilters();
+  const metrics = useMetrics(filters);
 
-  const getFilteredLeads = () => {
-    let filtered = leads;
-
-    // Filtrar por role do usuário
-    if (user?.role === "gestor") {
-      filtered = getLeadsByGestor(user.id);
-    } else if (user?.role === "corretor") {
-      filtered = getLeadsByCorretor(user.id);
-    }
-
-    // Aplicar filtros adicionais
-    if (filters.gestorId) {
-      filtered = filtered.filter((l) => l.gestorId === filters.gestorId);
-    }
-    if (filters.corretorId) {
-      filtered = filtered.filter((l) => l.corretorId === filters.corretorId);
-    }
-    if (filters.campanha) {
-      filtered = filtered.filter((l) => l.campanha === filters.campanha);
-    }
-    if (filters.feedback) {
-      filtered = filtered.filter((l) => l.feedback === filters.feedback);
-    }
-    if (filters.startDate) {
-      filtered = filtered.filter((l) => 
-        l.dataAtendimento && l.dataAtendimento >= filters.startDate!
-      );
-    }
-    if (filters.endDate) {
-      filtered = filtered.filter((l) => 
-        l.dataAtendimento && l.dataAtendimento <= filters.endDate!
-      );
-    }
-
-    return filtered;
-  };
-
-  const filteredLeads = getFilteredLeads();
-  const totalLeads = filteredLeads.length;
-  const atendidos = filteredLeads.filter((l) => l.status === "atendido").length;
-  const naoAtendidos = filteredLeads.filter((l) => l.status === "nao_atendido").length;
-  const pendentes = filteredLeads.filter((l) => l.status === "pendente").length;
-  const taxaSucesso = totalLeads > 0 ? ((atendidos / totalLeads) * 100).toFixed(1) : "0";
-
+  // Calcular totais de feedback (incluindo opt-outs)
+  const totalFeedbacks = metrics.feedbackMix.reduce((sum, c) => 
+    sum + c.interessado + c.agendado + c.recusou + c.optout, 0
+  );
+  
   const feedbackStats = {
-    interessado: filteredLeads.filter((l) => l.feedback === "interessado").length,
-    agendado: filteredLeads.filter((l) => l.feedback === "agendado").length,
-    recusou: filteredLeads.filter((l) => l.feedback === "recusou").length,
-    optout: filteredLeads.filter((l) => l.feedback === "optout").length,
+    interessado: metrics.feedbackMix.reduce((sum, c) => sum + c.interessado, 0),
+    agendado: metrics.feedbackMix.reduce((sum, c) => sum + c.agendado, 0),
+    recusou: metrics.feedbackMix.reduce((sum, c) => sum + c.recusou, 0),
+    optout: metrics.feedbackMix.reduce((sum, c) => sum + c.optout, 0),
   };
+
+  // Calcular não atendidos (ligações - atendimentos)
+  const naoAtendidos = metrics.ligacoes - metrics.atendimentos;
 
   return (
     <Layout>
@@ -81,19 +43,19 @@ export default function Dashboard() {
               <Users className="h-4 w-4 text-accent" />
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold">{totalLeads}</div>
+              <div className="text-3xl font-bold">{metrics.ligacoes}</div>
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">
-                Atendimentos
+                Atendimentos (com Opt-out)
               </CardTitle>
               <Phone className="h-4 w-4 text-accent" />
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold">{atendidos}</div>
+              <div className="text-3xl font-bold">{metrics.atendimentos}</div>
             </CardContent>
           </Card>
 
@@ -117,7 +79,7 @@ export default function Dashboard() {
               <TrendingUp className="h-4 w-4 text-accent" />
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold">{taxaSucesso}%</div>
+              <div className="text-3xl font-bold">{metrics.taxaSucesso.toFixed(1)}%</div>
             </CardContent>
           </Card>
         </div>
@@ -135,7 +97,7 @@ export default function Dashboard() {
                     <div
                       className="h-full bg-primary"
                       style={{
-                        width: `${atendidos > 0 ? (feedbackStats.interessado / atendidos) * 100 : 0}%`,
+                        width: `${totalFeedbacks > 0 ? (feedbackStats.interessado / totalFeedbacks) * 100 : 0}%`,
                       }}
                     />
                   </div>
@@ -149,7 +111,7 @@ export default function Dashboard() {
                     <div
                       className="h-full bg-primary"
                       style={{
-                        width: `${atendidos > 0 ? (feedbackStats.agendado / atendidos) * 100 : 0}%`,
+                        width: `${totalFeedbacks > 0 ? (feedbackStats.agendado / totalFeedbacks) * 100 : 0}%`,
                       }}
                     />
                   </div>
@@ -163,7 +125,7 @@ export default function Dashboard() {
                     <div
                       className="h-full bg-primary"
                       style={{
-                        width: `${atendidos > 0 ? (feedbackStats.recusou / atendidos) * 100 : 0}%`,
+                        width: `${totalFeedbacks > 0 ? (feedbackStats.recusou / totalFeedbacks) * 100 : 0}%`,
                       }}
                     />
                   </div>
@@ -177,7 +139,7 @@ export default function Dashboard() {
                     <div
                       className="h-full bg-primary"
                       style={{
-                        width: `${atendidos > 0 ? (feedbackStats.optout / atendidos) * 100 : 0}%`,
+                        width: `${totalFeedbacks > 0 ? (feedbackStats.optout / totalFeedbacks) * 100 : 0}%`,
                       }}
                     />
                   </div>
@@ -194,25 +156,13 @@ export default function Dashboard() {
             <CardContent className="space-y-4">
               <div className="space-y-2">
                 <div className="flex justify-between text-sm">
-                  <span>Pendentes</span>
-                  <span className="font-semibold">{pendentes}</span>
-                </div>
-                <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-accent"
-                    style={{ width: `${totalLeads > 0 ? (pendentes / totalLeads) * 100 : 0}%` }}
-                  />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span>Atendidos</span>
-                  <span className="font-semibold">{atendidos}</span>
+                  <span>Atendidos (com Opt-out)</span>
+                  <span className="font-semibold">{metrics.atendimentos}</span>
                 </div>
                 <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
                   <div
                     className="h-full bg-primary"
-                    style={{ width: `${totalLeads > 0 ? (atendidos / totalLeads) * 100 : 0}%` }}
+                    style={{ width: `${metrics.ligacoes > 0 ? (metrics.atendimentos / metrics.ligacoes) * 100 : 0}%` }}
                   />
                 </div>
               </div>
@@ -224,7 +174,19 @@ export default function Dashboard() {
                 <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
                   <div
                     className="h-full bg-primary"
-                    style={{ width: `${totalLeads > 0 ? (naoAtendidos / totalLeads) * 100 : 0}%` }}
+                    style={{ width: `${metrics.ligacoes > 0 ? (naoAtendidos / metrics.ligacoes) * 100 : 0}%` }}
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span>Opt-outs</span>
+                  <span className="font-semibold">{metrics.dataQuality.optouts}</span>
+                </div>
+                <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-accent"
+                    style={{ width: `${metrics.ligacoes > 0 ? (metrics.dataQuality.optouts / metrics.ligacoes) * 100 : 0}%` }}
                   />
                 </div>
               </div>
