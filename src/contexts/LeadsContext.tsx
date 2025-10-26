@@ -51,7 +51,7 @@ export function LeadsProvider({ children }: { children: ReactNode }) {
         .from("leads")
         .select(`
           *,
-          campanhas!fk_leads_campanha (nome)
+          campanhas (nome)
         `)
         .order("data_atendimento", { ascending: true, nullsFirst: true })
         .order("created_at", { ascending: true });
@@ -77,9 +77,10 @@ export function LeadsProvider({ children }: { children: ReactNode }) {
 
       setLeads(mappedLeads);
     } catch (error: any) {
+      console.error("Erro ao carregar leads:", error);
       toast({
         title: "Erro",
-        description: "Não foi possível carregar os leads",
+        description: error.message || "Não foi possível carregar os leads",
         variant: "destructive",
       });
     } finally {
