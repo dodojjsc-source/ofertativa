@@ -45,7 +45,8 @@ export default function Dashboard() {
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Atendimentos</CardTitle>
+              <CardTitle className="text-sm font-medium text-muted-foreground">Ligações Atendidas
+            </CardTitle>
               <Phone className="h-4 w-4 text-accent" />
             </CardHeader>
             <CardContent>
@@ -55,9 +56,8 @@ export default function Dashboard() {
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                Não Atendidos
-              </CardTitle>
+              <CardTitle className="text-sm font-medium text-muted-foreground">Não Atendidas
+            </CardTitle>
               <PhoneOff className="h-4 w-4 text-accent" />
             </CardHeader>
             <CardContent>
@@ -149,7 +149,7 @@ export default function Dashboard() {
               </div>
               <div className="space-y-2">
                 <div className="flex justify-between text-sm">
-                  <span>Atendimentos
+                  <span>Ligações Atendidas
                 </span>
                   <span className="font-semibold">
                     {metrics.atendimentos - metrics.dataQuality.optouts - metrics.dataQuality.numerosErrados}
