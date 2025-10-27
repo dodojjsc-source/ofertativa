@@ -11,6 +11,7 @@ import { FiltersProvider } from "@/contexts/FiltersContext";
 import { BitrixQueueProvider } from "@/contexts/BitrixQueueContext";
 import { AssignmentsProvider } from "@/contexts/AssignmentsContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { PWAPrompt } from "@/components/PWAPrompt";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import Login from "./pages/Login";
@@ -44,6 +45,7 @@ const App = () => (
                 <TooltipProvider>
                   <Toaster />
                   <Sonner />
+                  <PWAPrompt />
                   <BrowserRouter>
                     <Routes>
                       <Route path="/" element={<Index />} />
