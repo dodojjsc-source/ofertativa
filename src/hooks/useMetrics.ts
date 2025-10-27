@@ -3,6 +3,7 @@ import { useLeads, Lead } from "@/contexts/LeadsContext";
 import { useAssignments } from "@/contexts/AssignmentsContext";
 import { useBitrixQueue } from "@/contexts/BitrixQueueContext";
 import { useUsers } from "@/contexts/UsersContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { Filters } from "@/contexts/FiltersContext";
 import { useCampanhas } from "@/contexts/CampanhasContext";
 import { format, subDays, startOfDay, endOfDay, parseISO } from "date-fns";
@@ -49,6 +50,7 @@ export function useMetrics(filters: Filters) {
   const { queue } = useBitrixQueue();
   const { users } = useUsers();
   const { campanhas } = useCampanhas();
+  const { user } = useAuth();
 
   interface Optout {
     id: string;
@@ -93,27 +95,35 @@ export function useMetrics(filters: Filters) {
   }, [filters.startDate, filters.endDate]);
 
   return useMemo(() => {
+    // Aplicar filtros automáticos baseados na role do usuário
+    let effectiveFilters = { ...filters };
+    if (user?.role === "corretor") {
+      effectiveFilters.corretorId = user.id;
+    } else if (user?.role === "gestor") {
+      effectiveFilters.gestorId = user.id;
+    }
+    
     // Criar mapa de campanhas (nome -> id)
     const campanhaMap = new Map(campanhas.map(c => [c.nome, c.id]));
     
     // Aplicar filtros aos leads
     let filteredLeads = leads;
 
-    if (filters.gestorId) {
-      filteredLeads = filteredLeads.filter(l => l.gestorId === filters.gestorId);
+    if (effectiveFilters.gestorId) {
+      filteredLeads = filteredLeads.filter(l => l.gestorId === effectiveFilters.gestorId);
     }
 
-    if (filters.corretorId) {
-      filteredLeads = filteredLeads.filter(l => l.corretorId === filters.corretorId);
+    if (effectiveFilters.corretorId) {
+      filteredLeads = filteredLeads.filter(l => l.corretorId === effectiveFilters.corretorId);
     }
 
-    if (filters.campanha) {
-      filteredLeads = filteredLeads.filter(l => l.campanha === filters.campanha);
+    if (effectiveFilters.campanha) {
+      filteredLeads = filteredLeads.filter(l => l.campanha === effectiveFilters.campanha);
     }
 
-    if (filters.startDate && filters.endDate) {
-      const start = startOfDay(parseISO(filters.startDate));
-      const end = endOfDay(parseISO(filters.endDate));
+    if (effectiveFilters.startDate && effectiveFilters.endDate) {
+      const start = startOfDay(parseISO(effectiveFilters.startDate));
+      const end = endOfDay(parseISO(effectiveFilters.endDate));
       filteredLeads = filteredLeads.filter(l => {
         // Manter TODOS os leads pendentes (não têm dataAtendimento)
         if (l.status === "pendente") return true;
@@ -127,14 +137,14 @@ export function useMetrics(filters: Filters) {
 
     // Opt-outs filtrados conforme filtros aplicados
     let filteredOptouts = optouts;
-    if (filters.gestorId) {
-      filteredOptouts = filteredOptouts.filter(o => o.gestorId === filters.gestorId);
+    if (effectiveFilters.gestorId) {
+      filteredOptouts = filteredOptouts.filter(o => o.gestorId === effectiveFilters.gestorId);
     }
-    if (filters.corretorId) {
-      filteredOptouts = filteredOptouts.filter(o => o.corretorId === filters.corretorId);
+    if (effectiveFilters.corretorId) {
+      filteredOptouts = filteredOptouts.filter(o => o.corretorId === effectiveFilters.corretorId);
     }
-    if (filters.campanha) {
-      const campanhaId = campanhaMap.get(filters.campanha);
+    if (effectiveFilters.campanha) {
+      const campanhaId = campanhaMap.get(effectiveFilters.campanha);
       if (campanhaId) {
         filteredOptouts = filteredOptouts.filter(o => o.campanhaId === campanhaId);
       } else {
@@ -144,20 +154,20 @@ export function useMetrics(filters: Filters) {
     
     // Determinar se devemos incluir opt-outs nas métricas
     let includeOptouts = true;
-    if (filters.feedback) {
-      if (filters.feedback === "optout") {
+    if (effectiveFilters.feedback) {
+      if (effectiveFilters.feedback === "optout") {
         // Se filtro é "optout", mostrar SOMENTE opt-outs
         filteredLeads = filteredLeads.filter(l => l.feedback === "optout");
         includeOptouts = true;
-      } else if (["interessado", "agendado", "recusou"].includes(filters.feedback)) {
+      } else if (["interessado", "agendado", "recusou"].includes(effectiveFilters.feedback)) {
         // Se filtro é outro feedback específico, NÃO incluir opt-outs
         includeOptouts = false;
       }
     }
 
     // Preparar função para checar data dentro do filtro
-    const startRange = filters.startDate ? startOfDay(parseISO(filters.startDate)) : null;
-    const endRange = filters.endDate ? endOfDay(parseISO(filters.endDate)) : null;
+    const startRange = effectiveFilters.startDate ? startOfDay(parseISO(effectiveFilters.startDate)) : null;
+    const endRange = effectiveFilters.endDate ? endOfDay(parseISO(effectiveFilters.endDate)) : null;
     const inRange = (iso?: string) => {
       if (!iso) return false;
       if (!startRange || !endRange) return true;
@@ -174,25 +184,25 @@ export function useMetrics(filters: Filters) {
       const attempts = l.tentativasContato || 0;
       if (attempts <= 0) return acc;
       
-      // Para leads atendidos: contar tentativas anteriores ao atendimento
-      if (l.status === "atendido" && l.dataAtendimento) {
-        if (filters.startDate && filters.endDate && !inRange(l.dataAtendimento)) {
-          return acc;
+        // Para leads atendidos: contar tentativas anteriores ao atendimento
+        if (l.status === "atendido" && l.dataAtendimento) {
+          if (effectiveFilters.startDate && effectiveFilters.endDate && !inRange(l.dataAtendimento)) {
+            return acc;
+          }
+          return acc + attempts;
         }
-        return acc + attempts;
-      }
-      
-      // Para leads nao_atendido: contar todas as tentativas
-      if (l.status === "nao_atendido") {
-        if (filters.startDate && filters.endDate) {
-          if (!l.dataAtendimento || !inRange(l.dataAtendimento)) return acc;
+        
+        // Para leads nao_atendido: contar todas as tentativas
+        if (l.status === "nao_atendido") {
+          if (effectiveFilters.startDate && effectiveFilters.endDate) {
+            if (!l.dataAtendimento || !inRange(l.dataAtendimento)) return acc;
+          }
+          return acc + attempts;
         }
-        return acc + attempts;
-      }
-      
-      // Para leads pendentes: contar tentativas feitas
-      if (l.status === "pendente" && attempts > 0) {
-        if (filters.startDate && filters.endDate) {
+        
+        // Para leads pendentes: contar tentativas feitas
+        if (l.status === "pendente" && attempts > 0) {
+          if (effectiveFilters.startDate && effectiveFilters.endDate) {
           if (!l.dataAtendimento || !inRange(l.dataAtendimento)) return acc;
         }
         return acc + attempts;
@@ -260,7 +270,7 @@ export function useMetrics(filters: Filters) {
         
         // Para leads atendidos: contar tentativas anteriores ao atendimento
         if (l.status === "atendido" && l.dataAtendimento) {
-          if (filters.startDate && filters.endDate && !inRange(l.dataAtendimento)) {
+          if (effectiveFilters.startDate && effectiveFilters.endDate && !inRange(l.dataAtendimento)) {
             return acc;
           }
           return acc + attempts;
@@ -268,7 +278,7 @@ export function useMetrics(filters: Filters) {
         
         // Para leads nao_atendido ou pendentes com tentativas
         if (l.status === "nao_atendido" || (l.status === "pendente" && attempts > 0)) {
-          if (filters.startDate && filters.endDate) {
+          if (effectiveFilters.startDate && effectiveFilters.endDate) {
             if (!l.dataAtendimento || !inRange(l.dataAtendimento)) return acc;
           }
           return acc + attempts;
@@ -420,7 +430,7 @@ export function useMetrics(filters: Filters) {
 
     // Debug log para facilitar troubleshooting
     console.debug("📊 useMetrics:", {
-      filters,
+      filters: effectiveFilters,
       leadsFiltrados: filteredLeads.length,
       optoutsFiltrados: filteredOptouts.length,
       includeOptouts,
@@ -472,5 +482,5 @@ export function useMetrics(filters: Filters) {
             }, 0) / queue.filter(q => q.statusFila === "pendente").length
         : 0,
     };
-  }, [leads, assignments, queue, users, filters, optouts, campanhas]);
+  }, [leads, assignments, queue, users, filters, optouts, campanhas, user]);
 }

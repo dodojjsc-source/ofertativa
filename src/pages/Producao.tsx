@@ -1,9 +1,7 @@
-import { useEffect } from "react";
 import { Layout } from "@/components/Layout";
 import { useFilters } from "@/contexts/FiltersContext";
 import { useMetrics } from "@/hooks/useMetrics";
 import { useUsers } from "@/contexts/UsersContext";
-import { useAuth } from "@/contexts/AuthContext";
 import { ProductionFilters } from "@/components/production/ProductionFilters";
 import { KPICards } from "@/components/production/KPICards";
 import { RankingTable } from "@/components/production/RankingTable";
@@ -16,22 +14,9 @@ import { BitrixQueueTable } from "@/components/production/BitrixQueueTable";
 import { DataQualityCards } from "@/components/production/DataQualityCards";
 
 export default function Producao() {
-  const { filters, setFilters } = useFilters();
+  const { filters } = useFilters();
   const { users } = useUsers();
-  const { user } = useAuth();
   const metrics = useMetrics(filters);
-
-  // Aplicar filtro automático baseado na role do usuário
-  useEffect(() => {
-    if (user?.role === "corretor") {
-      // Corretor só vê seus próprios dados
-      setFilters({ ...filters, corretorId: user.id });
-    } else if (user?.role === "gestor") {
-      // Gestor só vê dados da sua equipe
-      setFilters({ ...filters, gestorId: user.id });
-    }
-    // Admin vê tudo (sem filtro)
-  }, [user?.id, user?.role]);
 
   const corretores = users
     .filter(u => u.role === "corretor" && u.status === "ativo")
