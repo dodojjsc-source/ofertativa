@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useFilters } from "@/contexts/FiltersContext";
 import { useUsers } from "@/contexts/UsersContext";
 import { useLeads } from "@/contexts/LeadsContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -14,11 +15,21 @@ import { toast } from "@/hooks/use-toast";
 export function ProductionFilters() {
   const { filters, setFilters, resetFilters, presets, savePreset, loadPreset, deletePreset } = useFilters();
   const { users } = useUsers();
+  const { user } = useAuth();
   const { leads } = useLeads();
   const [presetName, setPresetName] = useState("");
 
-  const gestores = users.filter(u => u.role === "gestor" && u.status === "ativo");
-  const corretores = users.filter(u => u.role === "corretor" && u.status === "ativo");
+  // Filtrar opções baseado na role do usuário
+  const gestores = user?.role === "admin" 
+    ? users.filter(u => u.role === "gestor" && u.status === "ativo")
+    : [];
+    
+  const corretores = user?.role === "admin"
+    ? users.filter(u => u.role === "corretor" && u.status === "ativo")
+    : user?.role === "gestor"
+    ? users.filter(u => u.role === "corretor" && u.status === "ativo" && u.gestorId === user.id)
+    : [];
+  
   const campanhas = Array.from(new Set(leads.map(l => l.campanha)));
 
   const handleSavePreset = () => {
@@ -45,45 +56,52 @@ export function ProductionFilters() {
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="space-y-2">
-            <Label>Gestor</Label>
-            <Select
-              value={filters.gestorId || "all"}
-              onValueChange={(value) => 
-                setFilters({ ...filters, gestorId: value === "all" ? undefined : value })
-              }
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Todos" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos</SelectItem>
-                {gestores.map(g => (
-                  <SelectItem key={g.id} value={g.id}>{g.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          {/* Só mostrar filtros de gestor/corretor para admin e gestor */}
+          {user?.role !== "corretor" && (
+            <>
+              {user?.role === "admin" && (
+                <div className="space-y-2">
+                  <Label>Gestor</Label>
+                  <Select
+                    value={filters.gestorId || "all"}
+                    onValueChange={(value) => 
+                      setFilters({ ...filters, gestorId: value === "all" ? undefined : value })
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Todos" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todos</SelectItem>
+                      {gestores.map(g => (
+                        <SelectItem key={g.id} value={g.id}>{g.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
 
-          <div className="space-y-2">
-            <Label>Corretor</Label>
-            <Select
-              value={filters.corretorId || "all"}
-              onValueChange={(value) => 
-                setFilters({ ...filters, corretorId: value === "all" ? undefined : value })
-              }
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Todos" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos</SelectItem>
-                {corretores.map(c => (
-                  <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+              <div className="space-y-2">
+                <Label>Corretor</Label>
+                <Select
+                  value={filters.corretorId || "all"}
+                  onValueChange={(value) => 
+                    setFilters({ ...filters, corretorId: value === "all" ? undefined : value })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Todos" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos</SelectItem>
+                    {corretores.map(c => (
+                      <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </>
+          )}
 
           <div className="space-y-2">
             <Label>Campanha</Label>

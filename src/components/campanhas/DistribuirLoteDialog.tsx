@@ -90,10 +90,16 @@ export function DistribuirLoteDialog({
 
         if (leadsDoCorretor.length === 0) break;
 
-        // Atualizar corretor_id nos leads
+        // Buscar gestor_id do corretor para sincronizar
+        const corretor = users.find(u => u.id === corretorId);
+        
+        // Atualizar corretor_id e gestor_id nos leads
         const { error: updateError } = await supabase
           .from("leads")
-          .update({ corretor_id: corretorId })
+          .update({ 
+            corretor_id: corretorId,
+            gestor_id: corretor?.gestorId || user.id
+          })
           .in("id", leadsDoCorretor.map((l) => l.id));
 
         if (updateError) throw updateError;

@@ -3,6 +3,7 @@ import { Layout } from "@/components/Layout";
 import { useUsers } from "@/contexts/UsersContext";
 import { useLeads } from "@/contexts/LeadsContext";
 import { useBitrixQueue } from "@/contexts/BitrixQueueContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -14,6 +15,7 @@ import { ptBR } from "date-fns/locale";
 export default function CorretorDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { user: currentUser } = useAuth();
   const { users } = useUsers();
   const { leads } = useLeads();
   const { queue } = useBitrixQueue();
@@ -26,6 +28,40 @@ export default function CorretorDetail() {
       <Layout>
         <div className="text-center py-12">
           <h2 className="text-2xl font-bold">Corretor não encontrado</h2>
+          <Button onClick={() => navigate("/producao")} className="mt-4">
+            Voltar
+          </Button>
+        </div>
+      </Layout>
+    );
+  }
+
+  // Validação de acesso: corretor só pode ver seu próprio perfil
+  if (currentUser?.role === "corretor" && currentUser.id !== id) {
+    return (
+      <Layout>
+        <div className="text-center py-12">
+          <h2 className="text-2xl font-bold">Acesso negado</h2>
+          <p className="text-muted-foreground mt-2">
+            Você só pode visualizar seu próprio perfil
+          </p>
+          <Button onClick={() => navigate(`/corretor/${currentUser.id}`)} className="mt-4">
+            Ver Meu Perfil
+          </Button>
+        </div>
+      </Layout>
+    );
+  }
+
+  // Validação de acesso: gestor só pode ver corretores da sua equipe
+  if (currentUser?.role === "gestor" && corretor?.gestorId !== currentUser.id) {
+    return (
+      <Layout>
+        <div className="text-center py-12">
+          <h2 className="text-2xl font-bold">Acesso negado</h2>
+          <p className="text-muted-foreground mt-2">
+            Este corretor não está na sua equipe
+          </p>
           <Button onClick={() => navigate("/producao")} className="mt-4">
             Voltar
           </Button>
