@@ -149,7 +149,8 @@ export default function Dashboard() {
               </div>
               <div className="space-y-2">
                 <div className="flex justify-between text-sm">
-                  <span>Atendidos (Positivos)</span>
+                  <span>Atendimentos
+                </span>
                   <span className="font-semibold">
                     {metrics.atendimentos - metrics.dataQuality.optouts - metrics.dataQuality.numerosErrados}
                   </span>
