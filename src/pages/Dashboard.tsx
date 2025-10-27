@@ -163,7 +163,7 @@ export default function Dashboard() {
               </div>
               <div className="space-y-2">
                 <div className="flex justify-between text-sm">
-                  <span>Não Atendidos</span>
+                  <span>Não Atendidas</span>
                   <span className="font-semibold">{naoAtendidos}</span>
                 </div>
                 <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
