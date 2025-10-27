@@ -5,6 +5,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AppUser, UserRole, useUsers } from "@/contexts/UsersContext";
+import { userSchema } from "@/lib/validationSchemas";
+import { z } from "zod";
+import { toast } from "@/hooks/use-toast";
 
 interface UserDialogProps {
   open: boolean;
@@ -49,36 +52,63 @@ export function UserDialog({ open, onOpenChange, user, onSave }: UserDialogProps
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Validar email único
-    const emailExists = users.some((u) => u.email === formData.email && u.id !== user?.id);
-    if (emailExists) {
-      alert("Email já cadastrado!");
-      return;
+    try {
+      // Validate input data
+      const validatedData = userSchema.parse(formData);
+
+      // Validar email único
+      const emailExists = users.some((u) => u.email === validatedData.email && u.id !== user?.id);
+      if (emailExists) {
+        toast({
+          title: "Email já cadastrado",
+          description: "Este email já está em uso por outro usuário",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Validar gestor obrigatório para corretor
+      if (validatedData.role === "corretor" && !validatedData.gestorId) {
+        toast({
+          title: "Gestor obrigatório",
+          description: "Selecione um gestor para este corretor",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const userData = {
+        name: validatedData.name,
+        email: validatedData.email,
+        telefone: validatedData.telefone || undefined,
+        role: validatedData.role,
+        gestorId: validatedData.role === "corretor" ? validatedData.gestorId : undefined,
+        status: validatedData.status,
+      };
+
+      if (user) {
+        updateUser(user.id, userData);
+      } else {
+        addUser(userData);
+      }
+
+      onSave();
+      onOpenChange(false);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        toast({
+          title: "Erro de validação",
+          description: error.errors[0].message,
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Erro ao salvar",
+          description: "Ocorreu um erro ao salvar o usuário",
+          variant: "destructive",
+        });
+      }
     }
-
-    // Validar gestor obrigatório para corretor
-    if (formData.role === "corretor" && !formData.gestorId) {
-      alert("Gestor é obrigatório para corretores!");
-      return;
-    }
-
-    const userData = {
-      name: formData.name,
-      email: formData.email,
-      telefone: formData.telefone || undefined,
-      role: formData.role,
-      gestorId: formData.role === "corretor" ? formData.gestorId : undefined,
-      status: formData.status,
-    };
-
-    if (user) {
-      updateUser(user.id, userData);
-    } else {
-      addUser(userData);
-    }
-
-    onSave();
-    onOpenChange(false);
   };
 
   const gestores = getGestores();

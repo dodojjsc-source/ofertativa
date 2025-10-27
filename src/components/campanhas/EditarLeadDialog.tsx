@@ -5,6 +5,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useLeads, Lead } from "@/contexts/LeadsContext";
 import { toast } from "@/hooks/use-toast";
+import { leadSchema } from "@/lib/validationSchemas";
+import { z } from "zod";
 
 interface EditarLeadDialogProps {
   lead: Lead | null;
@@ -29,23 +31,37 @@ export function EditarLeadDialog({ lead, open, onOpenChange }: EditarLeadDialogP
   const handleSalvar = async () => {
     if (!lead) return;
     
-    if (!nome.trim() || !telefone.trim()) {
-      toast({ 
-        title: "Campos obrigatórios", 
-        description: "Nome e telefone são obrigatórios",
-        variant: "destructive" 
+    try {
+      // Validate input data
+      const validatedData = leadSchema.parse({
+        nome,
+        telefone,
+        email: email || "",
       });
-      return;
+      
+      await updateLead(lead.id, {
+        nome: validatedData.nome,
+        telefone: validatedData.telefone,
+        email: validatedData.email || undefined,
+      });
+      
+      toast({ title: "Lead atualizado com sucesso" });
+      onOpenChange(false);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        toast({ 
+          title: "Erro de validação", 
+          description: error.errors[0].message,
+          variant: "destructive" 
+        });
+      } else {
+        toast({ 
+          title: "Erro ao atualizar", 
+          description: "Ocorreu um erro ao atualizar o lead",
+          variant: "destructive" 
+        });
+      }
     }
-    
-    await updateLead(lead.id, {
-      nome: nome.trim(),
-      telefone: telefone.trim(),
-      email: email.trim() || undefined,
-    });
-    
-    toast({ title: "Lead atualizado com sucesso" });
-    onOpenChange(false);
   };
 
   return (
