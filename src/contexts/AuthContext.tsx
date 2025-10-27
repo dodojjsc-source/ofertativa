@@ -94,7 +94,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (mounted) {
           setSession(session);
           if (session?.user) {
-            loadUserProfile(session.user.id);
+            setUser(null); // Clear while loading
+            setTimeout(() => {
+              if (mounted) loadUserProfile(session.user.id);
+            }, 0);
           } else {
             setUser(null);
           }
