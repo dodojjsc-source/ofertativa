@@ -11,15 +11,27 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const supabaseClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
-      {
-        auth: {
-          persistSession: false,
-        },
-      }
-    );
+    // Get authorization header
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader) {
+      throw new Error('Missing authorization header');
+    }
+
+    // Create Supabase client with service role
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabaseClient = createClient(supabaseUrl, supabaseServiceKey);
+
+    // Authenticate user
+    const token = authHeader.replace('Bearer ', '');
+    const { data: { user }, error: authError } = await supabaseClient.auth.getUser(token);
+    
+    if (authError || !user) {
+      console.error('Authentication failed:', authError);
+      throw new Error('Unauthorized');
+    }
+
+    console.log('User authenticated:', user.id);
 
     const { leadId, keepInLeads = true } = await req.json();
 
@@ -43,7 +55,25 @@ Deno.serve(async (req) => {
 
     console.log('Lead encontrado:', lead.nome);
 
-    // 2. Copiar para tabela nao_atendidos
+    // 2. Check user permissions (admin, gestor of lead, or corretor owner)
+    const { data: userRole } = await supabaseClient
+      .from('user_roles')
+      .select('role')
+      .eq('user_id', user.id)
+      .single();
+
+    const isAdmin = userRole?.role === 'admin';
+    const isGestor = userRole?.role === 'gestor' && lead.gestor_id === user.id;
+    const isCorretor = userRole?.role === 'corretor' && lead.corretor_id === user.id;
+
+    if (!isAdmin && !isGestor && !isCorretor) {
+      console.error('Insufficient permissions for user:', user.id);
+      throw new Error('You do not have permission to move this lead');
+    }
+
+    console.log('Permission granted. Moving lead...');
+
+    // 3. Copiar para tabela nao_atendidos
     const { error: insertError } = await supabaseClient
       .from('nao_atendidos')
       .insert({
@@ -67,7 +97,7 @@ Deno.serve(async (req) => {
 
     console.log('Lead copiado para nao_atendidos');
 
-    // 3. APENAS deletar se keepInLeads for false (mantém na campanha por padrão)
+    // 4. APENAS deletar se keepInLeads for false (mantém na campanha por padrão)
     if (!keepInLeads) {
       const { error: deleteError } = await supabaseClient
         .from('leads')

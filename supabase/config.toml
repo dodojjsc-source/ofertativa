@@ -5,3 +5,6 @@ verify_jwt = true
 
 [functions.move-to-optout]
 verify_jwt = true
+
+[functions.move-to-nao-atendidos]
+verify_jwt = true
