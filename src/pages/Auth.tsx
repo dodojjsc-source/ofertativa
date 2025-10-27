@@ -42,8 +42,6 @@ export default function Auth() {
           title: "Login realizado",
           description: "Bem-vindo de volta!",
         });
-        
-        navigate("/dashboard");
       } else {
         // Validar senha forte no signup
         const passwordValidation = passwordSchema.safeParse(formData.password);
