@@ -8,41 +8,51 @@ All colors MUST be HSL.
 
 @layer base {
   :root {
-    --background: 30 71% 97%;
-    --foreground: 200 11% 14%;
+    --background: 30 43% 93%;
+    --foreground: 203 11% 14%;
 
-    --card: 30 100% 98%;
-    --card-foreground: 200 11% 14%;
+    --card: 32 48% 95%;
+    --card-foreground: 203 11% 14%;
 
-    --popover: 30 100% 98%;
-    --popover-foreground: 200 11% 14%;
+    --popover: 32 48% 95%;
+    --popover-foreground: 203 11% 14%;
 
-    --primary: 200 11% 14%;
+    --primary: 203 11% 14%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 30 100% 98%;
-    --secondary-foreground: 200 11% 14%;
+    --secondary: 32 48% 95%;
+    --secondary-foreground: 203 11% 14%;
 
-    --muted: 30 100% 97%;
-    --muted-foreground: 200 11% 45%;
+    --muted: 28 100% 97%;
+    --muted-foreground: 203 11% 45%;
 
-    --accent: 22 90% 54%;
+    --accent: 23 89% 54%;
     --accent-foreground: 0 0% 100%;
 
-    --destructive: 0 84.2% 60.2%;
+    --destructive: 2 65% 58%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 30 100% 98%;
-    --input: 30 100% 97%;
-    --ring: 22 90% 54%;
+    --success: 120 43% 54%;
+    --success-foreground: 0 0% 100%;
+
+    --warning: 35 84% 62%;
+    --warning-foreground: 203 11% 14%;
+
+    --border: 30 25% 88%;
+    --input: 30 25% 88%;
+    --ring: 23 89% 54%;
 
     --radius: 0.75rem;
 
-    --chart-1: 200 11% 14%;
-    --chart-2: 22 90% 54%;
-    --chart-3: 30 71% 85%;
-    --chart-4: 200 11% 30%;
-    --chart-5: 22 90% 70%;
+    --shadow-card: 0px 2px 8px rgba(0, 0, 0, 0.08);
+    --shadow-hover: 0px 4px 12px rgba(0, 0, 0, 0.10);
+    --border-width-card: 1.25px;
+
+    --chart-1: 203 11% 14%;
+    --chart-2: 23 89% 54%;
+    --chart-3: 30 43% 85%;
+    --chart-4: 203 11% 30%;
+    --chart-5: 23 89% 70%;
   }
 }
 
