@@ -233,9 +233,14 @@ export function useMetrics(filters: Filters) {
       return d >= startRange && d <= endRange;
     };
 
-    // KPIs gerais (contando opt-out como atendimento, excluindo numero_errado)
-    const atendimentosBase = filteredLeads.filter(l => l.status === "atendido" && l.feedback !== "numero_errado").length;
-    const atendimentos = atendimentosBase + (includeOptouts ? filteredOptouts.length : 0);
+    // KPIs gerais (APENAS feedbacks úteis contam como atendimento)
+    // Número errado e opt-out NÃO são atendimentos, apenas ligações realizadas
+    const atendimentos = filteredLeads.filter(l => 
+      l.status === "atendido" && 
+      l.feedback !== "numero_errado" &&
+      l.feedback !== "optout" &&
+      ["interessado", "agendado", "recusou"].includes(l.feedback || "")
+    ).length;
     
     // Contar TODAS as tentativas registradas, independente do status final
     const naoAtendimentos = filteredLeads.reduce((acc, l) => {
@@ -268,7 +273,9 @@ export function useMetrics(filters: Filters) {
       
       return acc;
     }, 0);
-    const ligacoes = atendimentos + naoAtendimentos;
+    
+    // Ligações = atendimentos úteis + não atendidos + opt-outs + números errados
+    const ligacoes = atendimentos + naoAtendimentos + (includeOptouts ? filteredOptouts.length : 0) + filteredContatosErrados.length;
     const taxaSucesso = ligacoes > 0 ? (atendimentos / ligacoes) * 100 : 0;
     const filaPendente = queue.filter(q => q.statusFila === "pendente").length;
 
@@ -318,9 +325,13 @@ export function useMetrics(filters: Filters) {
     const corretores = users.filter(u => u.role === "corretor" && u.status === "ativo");
     const rankingCorretores: CorretorMetrics[] = corretores.map(corretor => {
       const corretorLeads = filteredLeads.filter(l => l.corretorId === corretor.id);
-      const corretorAtendimentosLeads = corretorLeads.filter(l => l.status === "atendido" && l.feedback !== "numero_errado").length;
-      const corretorOptouts = includeOptouts ? filteredOptouts.filter(o => o.corretorId === corretor.id).length : 0;
-      const corretorAtendimentos = corretorAtendimentosLeads + corretorOptouts;
+      // Atendimentos = APENAS feedbacks úteis (interessado, agendado, recusou)
+      const corretorAtendimentos = corretorLeads.filter(l => 
+        l.status === "atendido" && 
+        l.feedback !== "numero_errado" &&
+        l.feedback !== "optout" &&
+        ["interessado", "agendado", "recusou"].includes(l.feedback || "")
+      ).length;
       // Contar tentativas de TODOS os leads (atendidos ou não)
       const corretorNaoAtendimentos = corretorLeads.reduce((acc, l) => {
         const attempts = l.tentativasContato || 0;
@@ -344,7 +355,11 @@ export function useMetrics(filters: Filters) {
         
         return acc;
       }, 0);
-      const corretorLigacoes = corretorAtendimentos + corretorNaoAtendimentos;
+      
+      // Ligações = atendimentos úteis + não atendidos + opt-outs + números errados deste corretor
+      const corretorOptouts = filteredOptouts.filter(o => o.corretorId === corretor.id).length;
+      const corretorNumerosErrados = filteredContatosErrados.filter(ce => ce.corretorId === corretor.id).length;
+      const corretorLigacoes = corretorAtendimentos + corretorNaoAtendimentos + corretorOptouts + corretorNumerosErrados;
       const corretorTaxaSucesso = corretorLigacoes > 0 
         ? (corretorAtendimentos / corretorLigacoes) * 100 
         : 0;
@@ -366,13 +381,13 @@ export function useMetrics(filters: Filters) {
       const metaDiaria = corretor.metaDiaria || 60;
       const pacingHoje = (ligacoesHoje / metaDiaria) * 100;
 
-      // Percentual do lote (contando opt-out como concluído)
+      // Percentual do lote (todos os leads processados = concluídos)
       const atribuidosLote = assignments.filter(a => 
         a.corretorId === corretor.id && a.statusDistribuicao === "pendente"
       ).length;
       const concluidosLote = corretorLeads.filter(l => 
         l.status === "atendido" || l.status === "nao_atendido"
-      ).length + (includeOptouts ? corretorOptouts : 0);
+      ).length + corretorOptouts + corretorNumerosErrados;
       const percentualLote = atribuidosLote > 0 
         ? (concluidosLote / atribuidosLote) * 100 
         : 0;
