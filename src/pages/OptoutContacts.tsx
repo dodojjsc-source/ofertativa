@@ -7,6 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Input } from "@/components/ui/input";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { PhoneLink } from "@/components/ui/phone-link";
 
 interface OptoutContact {
   id: string;
@@ -113,7 +114,9 @@ export default function OptoutContacts() {
                   {filteredContatos.map((contato) => (
                     <TableRow key={contato.id}>
                       <TableCell className="font-medium">{contato.nome}</TableCell>
-                      <TableCell>{contato.telefone}</TableCell>
+                      <TableCell>
+                        <PhoneLink phone={contato.telefone} />
+                      </TableCell>
                       <TableCell>{contato.email || "-"}</TableCell>
                       <TableCell className="max-w-xs truncate">
                         {contato.observacao || "-"}

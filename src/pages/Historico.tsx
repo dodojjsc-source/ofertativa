@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Trash2, Eye } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
+import { PhoneLink } from "@/components/ui/phone-link";
 
 export default function Historico() {
   const { user } = useAuth();
@@ -119,7 +120,9 @@ export default function Historico() {
                   filteredLeads.map((lead) => (
                     <TableRow key={lead.id}>
                       <TableCell className="font-medium">{lead.nome}</TableCell>
-                      <TableCell>{lead.telefone}</TableCell>
+                      <TableCell>
+                        <PhoneLink phone={lead.telefone} />
+                      </TableCell>
                       <TableCell>{lead.campanha}</TableCell>
                       <TableCell>{getFeedbackBadge(lead.feedback)}</TableCell>
                       <TableCell>

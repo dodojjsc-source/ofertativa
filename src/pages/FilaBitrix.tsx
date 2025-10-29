@@ -14,6 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { Download, CheckCircle, XCircle, Trash2, Filter } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { format } from "date-fns";
+import { PhoneLink } from "@/components/ui/phone-link";
 
 export default function FilaBitrix() {
   const { user } = useAuth();
@@ -414,7 +415,9 @@ export default function FilaBitrix() {
                         {format(new Date(item.timestampCriacao), "dd/MM/yyyy HH:mm")}
                       </TableCell>
                       <TableCell className="font-medium">{item.nome}</TableCell>
-                      <TableCell>{item.telefone}</TableCell>
+                      <TableCell>
+                        <PhoneLink phone={item.telefone} />
+                      </TableCell>
                       <TableCell>{item.corretorNome}</TableCell>
                       <TableCell>{item.gestorNome}</TableCell>
                       <TableCell className="text-sm">{item.campanhaNome}</TableCell>

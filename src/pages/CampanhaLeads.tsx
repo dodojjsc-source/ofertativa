@@ -15,6 +15,7 @@ import { useState } from "react";
 import { EditarLeadDialog } from "@/components/campanhas/EditarLeadDialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { toast } from "@/hooks/use-toast";
+import { PhoneLink } from "@/components/ui/phone-link";
 
 export default function CampanhaLeads() {
   const { campanhaId } = useParams<{ campanhaId: string }>();
@@ -115,7 +116,9 @@ export default function CampanhaLeads() {
                   campanhaLeads.map((lead) => (
                     <TableRow key={lead.id}>
                       <TableCell className="font-medium">{lead.nome}</TableCell>
-                      <TableCell>{lead.telefone}</TableCell>
+                      <TableCell>
+                        <PhoneLink phone={lead.telefone} />
+                      </TableCell>
                       <TableCell>{lead.email || "-"}</TableCell>
                       <TableCell>
                         <Badge variant={getStatusBadge(lead.status)}>

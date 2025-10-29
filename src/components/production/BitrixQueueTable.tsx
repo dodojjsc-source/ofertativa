@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { useBitrixQueue } from "@/contexts/BitrixQueueContext";
 import { formatDistanceToNow, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { PhoneLink } from "@/components/ui/phone-link";
 
 export function BitrixQueueTable() {
   const { queue } = useBitrixQueue();
@@ -36,7 +37,9 @@ export function BitrixQueueTable() {
               {pendingQueue.slice(0, 10).map((item) => (
                 <TableRow key={item.id}>
                   <TableCell>{item.nome}</TableCell>
-                  <TableCell>{item.telefone}</TableCell>
+                  <TableCell>
+                    <PhoneLink phone={item.telefone} />
+                  </TableCell>
                   <TableCell className="text-xs">{item.campanhaId}</TableCell>
                   <TableCell>
                     <Badge variant="outline">{item.feedback}</Badge>

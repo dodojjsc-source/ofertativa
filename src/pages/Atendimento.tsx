@@ -14,6 +14,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Phone, PhoneOff, User, Mail, FolderOpen, XCircle } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
+import { PhoneLink } from "@/components/ui/phone-link";
 
 export default function Atendimento() {
   const { user } = useAuth();
@@ -355,7 +356,11 @@ export default function Atendimento() {
                 <Phone className="h-5 w-5 text-accent" />
                 <div>
                   <p className="text-sm text-muted-foreground">Telefone</p>
-                  <p className="text-lg font-semibold">{currentLead.telefone}</p>
+                  <PhoneLink 
+                    phone={currentLead.telefone} 
+                    className="text-lg font-semibold"
+                    showIcon={false}
+                  />
                 </div>
               </div>
               {currentLead.email && (

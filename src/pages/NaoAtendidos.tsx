@@ -7,6 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
 import { PhoneOff } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
+import { PhoneLink } from "@/components/ui/phone-link";
 
 interface NaoAtendido {
   id: string;
@@ -91,7 +92,9 @@ export default function NaoAtendidos() {
                   {naoAtendidos.map((lead) => (
                     <TableRow key={lead.id}>
                       <TableCell className="font-medium">{lead.nome}</TableCell>
-                      <TableCell>{lead.telefone}</TableCell>
+                      <TableCell>
+                        <PhoneLink phone={lead.telefone} />
+                      </TableCell>
                       <TableCell>{lead.email || "-"}</TableCell>
                       <TableCell>
                         <Badge variant="outline">{lead.campanha_nome}</Badge>

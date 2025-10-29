@@ -11,6 +11,7 @@ import { ArrowLeft, Phone, CheckCircle, TrendingUp, Send } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatDistanceToNow, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { PhoneLink } from "@/components/ui/phone-link";
 
 export default function CorretorDetail() {
   const { id } = useParams<{ id: string }>();
@@ -180,7 +181,9 @@ export default function CorretorDetail() {
                 {atendidosRecentes.map(lead => (
                   <TableRow key={lead.id}>
                     <TableCell>{lead.nome}</TableCell>
-                    <TableCell>{lead.telefone}</TableCell>
+                    <TableCell>
+                      <PhoneLink phone={lead.telefone} />
+                    </TableCell>
                     <TableCell className="text-xs">{lead.campanha}</TableCell>
                     <TableCell>
                       <Badge variant="outline">{lead.feedback}</Badge>
