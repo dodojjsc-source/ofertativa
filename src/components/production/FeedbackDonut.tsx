@@ -12,6 +12,7 @@ const COLORS = [
   "hsl(var(--chart-2))",
   "hsl(var(--chart-3))",
   "hsl(var(--chart-4))",
+  "hsl(var(--chart-5))",
 ];
 
 export function FeedbackDonut({ data, corretores }: FeedbackDonutProps) {
@@ -21,15 +22,17 @@ export function FeedbackDonut({ data, corretores }: FeedbackDonutProps) {
       interessado: acc.interessado + curr.interessado,
       agendado: acc.agendado + curr.agendado,
       recusou: acc.recusou + curr.recusou,
+      numeroErrado: acc.numeroErrado + curr.numeroErrado,
       optout: acc.optout + curr.optout,
     }),
-    { interessado: 0, agendado: 0, recusou: 0, optout: 0 }
+    { interessado: 0, agendado: 0, recusou: 0, numeroErrado: 0, optout: 0 }
   );
 
   const chartData = [
     { name: "Interessado", value: aggregated.interessado },
     { name: "Agendado", value: aggregated.agendado },
     { name: "Recusou", value: aggregated.recusou },
+    { name: "Número Errado", value: aggregated.numeroErrado },
     { name: "Opt-out", value: aggregated.optout },
   ];
 

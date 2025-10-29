@@ -41,6 +41,7 @@ export interface FeedbackMix {
   interessado: number;
   agendado: number;
   recusou: number;
+  numeroErrado: number;
   optout: number;
 }
 
@@ -60,7 +61,16 @@ export function useMetrics(filters: Filters) {
     campanhaId: string | null;
   }
 
+  interface ContatoErrado {
+    id: string;
+    flaggedAt: string;
+    corretorId: string | null;
+    gestorId: string | null;
+    campanhaId: string | null;
+  }
+
   const [optouts, setOptouts] = useState<Optout[]>([]);
+  const [contatosErrados, setContatosErrados] = useState<ContatoErrado[]>([]);
 
   useEffect(() => {
     const fetchOptouts = async () => {
@@ -92,6 +102,37 @@ export function useMetrics(filters: Filters) {
     };
 
     fetchOptouts();
+  }, [filters.startDate, filters.endDate]);
+
+  useEffect(() => {
+    const fetchContatosErrados = async () => {
+      let query = supabase
+        .from('contatos_errados')
+        .select('id, flagged_at, corretor_id, gestor_id, campanha_id');
+
+      if (filters.startDate) {
+        query = query.gte('flagged_at', startOfDay(new Date(filters.startDate)).toISOString());
+      }
+      if (filters.endDate) {
+        query = query.lte('flagged_at', endOfDay(new Date(filters.endDate)).toISOString());
+      }
+
+      const { data, error } = await query;
+      if (error) {
+        console.error('Erro ao buscar contatos errados:', error);
+        setContatosErrados([]);
+        return;
+      }
+      setContatosErrados((data || []).map((d: any) => ({
+        id: d.id,
+        flaggedAt: d.flagged_at,
+        corretorId: d.corretor_id,
+        gestorId: d.gestor_id,
+        campanhaId: d.campanha_id,
+      })));
+    };
+
+    fetchContatosErrados();
   }, [filters.startDate, filters.endDate]);
 
   return useMemo(() => {
@@ -151,6 +192,23 @@ export function useMetrics(filters: Filters) {
         filteredOptouts = [];
       }
     }
+
+    // Contatos errados filtrados conforme filtros aplicados
+    let filteredContatosErrados = contatosErrados;
+    if (effectiveFilters.gestorId) {
+      filteredContatosErrados = filteredContatosErrados.filter(c => c.gestorId === effectiveFilters.gestorId);
+    }
+    if (effectiveFilters.corretorId) {
+      filteredContatosErrados = filteredContatosErrados.filter(c => c.corretorId === effectiveFilters.corretorId);
+    }
+    if (effectiveFilters.campanha) {
+      const campanhaId = campanhaMap.get(effectiveFilters.campanha);
+      if (campanhaId) {
+        filteredContatosErrados = filteredContatosErrados.filter(c => c.campanhaId === campanhaId);
+      } else {
+        filteredContatosErrados = [];
+      }
+    }
     
     // Determinar se devemos incluir opt-outs nas métricas
     let includeOptouts = true;
@@ -175,8 +233,8 @@ export function useMetrics(filters: Filters) {
       return d >= startRange && d <= endRange;
     };
 
-    // KPIs gerais (contando opt-out como atendimento)
-    const atendimentosBase = filteredLeads.filter(l => l.status === "atendido").length;
+    // KPIs gerais (contando opt-out como atendimento, excluindo numero_errado)
+    const atendimentosBase = filteredLeads.filter(l => l.status === "atendido" && l.feedback !== "numero_errado").length;
     const atendimentos = atendimentosBase + (includeOptouts ? filteredOptouts.length : 0);
     
     // Contar TODAS as tentativas registradas, independente do status final
@@ -260,7 +318,7 @@ export function useMetrics(filters: Filters) {
     const corretores = users.filter(u => u.role === "corretor" && u.status === "ativo");
     const rankingCorretores: CorretorMetrics[] = corretores.map(corretor => {
       const corretorLeads = filteredLeads.filter(l => l.corretorId === corretor.id);
-      const corretorAtendimentosLeads = corretorLeads.filter(l => l.status === "atendido").length;
+      const corretorAtendimentosLeads = corretorLeads.filter(l => l.status === "atendido" && l.feedback !== "numero_errado").length;
       const corretorOptouts = includeOptouts ? filteredOptouts.filter(o => o.corretorId === corretor.id).length : 0;
       const corretorAtendimentos = corretorAtendimentosLeads + corretorOptouts;
       // Contar tentativas de TODOS os leads (atendidos ou não)
@@ -396,16 +454,18 @@ export function useMetrics(filters: Filters) {
       }
     }
 
-    // Feedback mix
+    // Feedback mix (opt-out SOMENTE da tabela optout_contacts)
     const feedbackMix: FeedbackMix[] = rankingCorretores.map(c => {
       const corretorLeads = filteredLeads.filter(l => l.corretorId === c.corretorId);
       const corretorOptouts = filteredOptouts.filter(o => o.corretorId === c.corretorId).length;
+      const corretorNumerosErrados = filteredContatosErrados.filter(ce => ce.corretorId === c.corretorId).length;
       return {
         corretorId: c.corretorId,
         interessado: corretorLeads.filter(l => l.feedback === "interessado").length,
         agendado: corretorLeads.filter(l => l.feedback === "agendado").length,
         recusou: corretorLeads.filter(l => l.feedback === "recusou").length,
-        optout: corretorLeads.filter(l => l.feedback === "optout").length + (includeOptouts ? corretorOptouts : 0),
+        numeroErrado: corretorLeads.filter(l => l.feedback === "numero_errado").length + corretorNumerosErrados,
+        optout: includeOptouts ? corretorOptouts : 0,
       };
     });
 
@@ -421,7 +481,7 @@ export function useMetrics(filters: Filters) {
     const duplicidades = telefones.length - new Set(telefones).size;
 
     const optoutsCount = includeOptouts ? filteredOptouts.length : 0;
-    const numerosErrados = filteredLeads.filter(l => l.feedback === "numero_errado").length;
+    const numerosErrados = filteredLeads.filter(l => l.feedback === "numero_errado").length + filteredContatosErrados.length;
 
     // Calcular pendentes e total de leads
     const pendentes = filteredLeads.filter(l => l.status === "pendente").length;
@@ -482,5 +542,5 @@ export function useMetrics(filters: Filters) {
             }, 0) / queue.filter(q => q.statusFila === "pendente").length
         : 0,
     };
-  }, [leads, assignments, queue, users, filters, optouts, campanhas, user]);
+  }, [leads, assignments, queue, users, filters, optouts, contatosErrados, campanhas, user]);
 }

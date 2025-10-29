@@ -10,12 +10,13 @@ export default function Dashboard() {
   } = useFilters();
   const metrics = useMetrics(filters);
 
-  // Calcular totais de feedback (incluindo opt-outs)
-  const totalFeedbacks = metrics.feedbackMix.reduce((sum, c) => sum + c.interessado + c.agendado + c.recusou + c.optout, 0);
+  // Calcular totais de feedback (incluindo opt-outs e números errados)
+  const totalFeedbacks = metrics.feedbackMix.reduce((sum, c) => sum + c.interessado + c.agendado + c.recusou + c.numeroErrado + c.optout, 0);
   const feedbackStats = {
     interessado: metrics.feedbackMix.reduce((sum, c) => sum + c.interessado, 0),
     agendado: metrics.feedbackMix.reduce((sum, c) => sum + c.agendado, 0),
     recusou: metrics.feedbackMix.reduce((sum, c) => sum + c.recusou, 0),
+    numeroErrado: metrics.feedbackMix.reduce((sum, c) => sum + c.numeroErrado, 0),
     optout: metrics.feedbackMix.reduce((sum, c) => sum + c.optout, 0)
   };
 
@@ -117,10 +118,21 @@ export default function Dashboard() {
                 </div>
               </div>
               <div className="flex items-center justify-between">
+                <span className="text-sm">Número Errado</span>
+                <div className="flex items-center gap-2">
+                  <div className="w-32 h-2 bg-muted rounded-full overflow-hidden">
+                    <div className="h-full bg-destructive" style={{
+                    width: `${totalFeedbacks > 0 ? feedbackStats.numeroErrado / totalFeedbacks * 100 : 0}%`
+                  }} />
+                  </div>
+                  <span className="text-sm font-semibold w-8 text-right">{feedbackStats.numeroErrado}</span>
+                </div>
+              </div>
+              <div className="flex items-center justify-between">
                 <span className="text-sm">Opt-out</span>
                 <div className="flex items-center gap-2">
                   <div className="w-32 h-2 bg-muted rounded-full overflow-hidden">
-                    <div className="h-full bg-primary" style={{
+                    <div className="h-full bg-accent" style={{
                     width: `${totalFeedbacks > 0 ? feedbackStats.optout / totalFeedbacks * 100 : 0}%`
                   }} />
                   </div>
