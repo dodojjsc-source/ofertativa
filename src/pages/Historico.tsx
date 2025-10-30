@@ -19,13 +19,19 @@ export default function Historico() {
   const { users } = useUsers();
 
   const getFilteredLeads = () => {
-    let filtered = leads.filter((l) => l.status === "atendido");
+    let filtered = leads.filter((l) => 
+      l.status === "atendido" || l.status === "nao_atendido"
+    );
 
     // Filtrar por role do usuário
     if (user?.role === "gestor") {
-      filtered = getLeadsByGestor(user.id).filter((l) => l.status === "atendido");
+      filtered = getLeadsByGestor(user.id).filter((l) => 
+        l.status === "atendido" || l.status === "nao_atendido"
+      );
     } else if (user?.role === "corretor") {
-      filtered = getLeadsByCorretor(user.id).filter((l) => l.status === "atendido");
+      filtered = getLeadsByCorretor(user.id).filter((l) => 
+        l.status === "atendido" || l.status === "nao_atendido"
+      );
     }
 
     // Aplicar filtros adicionais
@@ -109,6 +115,7 @@ export default function Historico() {
                   <TableHead>Corretor</TableHead>
                   <TableHead>Campanha</TableHead>
                   <TableHead>Feedback</TableHead>
+                  <TableHead>Status</TableHead>
                   <TableHead>Bitrix</TableHead>
                   <TableHead>Data</TableHead>
                   <TableHead className="text-right">Ações</TableHead>
@@ -117,7 +124,7 @@ export default function Historico() {
               <TableBody>
                 {filteredLeads.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
+                    <TableCell colSpan={9} className="text-center text-muted-foreground py-8">
                       Nenhum atendimento registrado
                     </TableCell>
                   </TableRow>
@@ -126,13 +133,30 @@ export default function Historico() {
                     <TableRow key={lead.id}>
                       <TableCell className="font-medium">{lead.nome}</TableCell>
                       <TableCell>
-                        <PhoneLink phone={lead.telefone} />
+                        <PhoneLink 
+                          phone={lead.telefone}
+                          e164={lead.e164}
+                          whatsappUrl={lead.whatsapp_url}
+                          display={lead.display_local}
+                          showWhatsApp={true}
+                        />
                       </TableCell>
                       <TableCell>
                         {users.find(u => u.id === lead.corretorId)?.name || "Sem corretor"}
                       </TableCell>
                       <TableCell>{lead.campanha}</TableCell>
                       <TableCell>{getFeedbackBadge(lead.feedback)}</TableCell>
+                      <TableCell>
+                        {lead.status === "nao_atendido" ? (
+                          <Badge variant="outline" className="bg-yellow-100 text-yellow-800 border-yellow-300">
+                            Não Atendido ({lead.tentativasContato || 0}/3)
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className="bg-green-100 text-green-800 border-green-300">
+                            Atendido
+                          </Badge>
+                        )}
+                      </TableCell>
                       <TableCell>
                         {lead.repassarBitrix ? (
                           <Badge variant="outline" className="bg-accent/10 text-accent border-accent">Sim</Badge>
