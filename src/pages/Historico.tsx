@@ -20,17 +20,23 @@ export default function Historico() {
 
   const getFilteredLeads = () => {
     let filtered = leads.filter((l) => 
-      l.status === "atendido" || l.status === "nao_atendido"
+      l.status === "atendido" || 
+      l.status === "nao_atendido" ||
+      (l.status === "pendente" && (l.tentativasContato || 0) > 0)
     );
 
     // Filtrar por role do usuário
     if (user?.role === "gestor") {
       filtered = getLeadsByGestor(user.id).filter((l) => 
-        l.status === "atendido" || l.status === "nao_atendido"
+        l.status === "atendido" || 
+        l.status === "nao_atendido" ||
+        (l.status === "pendente" && (l.tentativasContato || 0) > 0)
       );
     } else if (user?.role === "corretor") {
       filtered = getLeadsByCorretor(user.id).filter((l) => 
-        l.status === "atendido" || l.status === "nao_atendido"
+        l.status === "atendido" || 
+        l.status === "nao_atendido" ||
+        (l.status === "pendente" && (l.tentativasContato || 0) > 0)
       );
     }
 
@@ -150,6 +156,10 @@ export default function Historico() {
                         {lead.status === "nao_atendido" ? (
                           <Badge variant="outline" className="bg-yellow-100 text-yellow-800 border-yellow-300">
                             Não Atendido ({lead.tentativasContato || 0}/3)
+                          </Badge>
+                        ) : lead.status === "pendente" && (lead.tentativasContato || 0) > 0 ? (
+                          <Badge variant="outline" className="bg-blue-100 text-blue-800 border-blue-300">
+                            Em Contato ({lead.tentativasContato || 0}/3)
                           </Badge>
                         ) : (
                           <Badge variant="outline" className="bg-green-100 text-green-800 border-green-300">
