@@ -28,6 +28,7 @@ import CampanhaLeads from "./pages/CampanhaLeads";
 import ContatosErrados from "./pages/ContatosErrados";
 import OptoutContacts from "./pages/OptoutContacts";
 import NaoAtendidos from "./pages/NaoAtendidos";
+import BackfillTelefones from "./pages/BackfillTelefones";
 import AcceptInvite from "./pages/AcceptInvite";
 import NotFound from "./pages/NotFound";
 
@@ -153,6 +154,14 @@ const App = () => (
                         element={
                           <ProtectedRoute allowedRoles={["admin"]}>
                             <NaoAtendidos />
+                          </ProtectedRoute>
+                        }
+                      />
+                      <Route
+                        path="/backfill-telefones"
+                        element={
+                          <ProtectedRoute allowedRoles={["admin"]}>
+                            <BackfillTelefones />
                           </ProtectedRoute>
                         }
                       />

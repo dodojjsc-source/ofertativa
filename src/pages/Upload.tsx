@@ -15,6 +15,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Upload as UploadIcon, FileSpreadsheet, RefreshCw, Undo2 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { z } from "zod";
+import { normalizarTelefone } from "@/lib/phoneNormalization";
 
 // Helpers para normalizar cabeçalhos e extrair telefones
 const normalizeHeader = (s: string) => s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, "").trim();
@@ -120,8 +121,9 @@ export default function Upload() {
       const worksheet = workbook.Sheets[sheetName];
       const jsonData = XLSX.utils.sheet_to_json<any>(worksheet);
 
-      // Validar e parsear dados com Zod
+      // Validar e parsear dados com Zod + normalização de telefone
       let multiplePhoneCount = 0;
+      let invalidPhones = 0;
       const parsedLeads = jsonData.map((row, index) => {
         const rawNome = String(getCell(row, ["Nome", "nome", "NOME"]) ?? "").trim();
         const rawTel = String(getCell(row, ["Telefone", "telefone", "TELEFONE"]) ?? "").trim();
@@ -133,36 +135,50 @@ export default function Upload() {
           throw new Error(`Linha ${index + 2}: Telefone inválido. Você pode separar múltiplos telefones por vírgula, ponto e vírgula, barra ou pipe (|)`);
         }
 
+        // Normalizar telefone
+        const phoneResult = normalizarTelefone(firstPhone);
+        
+        if (phoneResult.validacao === "invalido") {
+          invalidPhones++;
+          throw new Error(`Linha ${index + 2}: ${phoneResult.motivo_validacao}`);
+        }
+
         // Detectar se havia múltiplos telefones
         const parts = rawTel.split(/[;,/|]/).map(p => p.trim()).filter(Boolean);
         if (parts.length > 1) {
           multiplePhoneCount++;
         }
+        
         const validation = leadSchema.safeParse({
           nome: rawNome,
-          telefone: firstPhone,
+          telefone: phoneResult.display_local,
           email: rawMail
         });
         if (!validation.success) {
           throw new Error(`Linha ${index + 2}: ${validation.error.errors[0].message}`);
         }
+        
         return {
           nome: validation.data.nome,
           telefone: validation.data.telefone,
+          telefone_raw: firstPhone,
+          e164: phoneResult.e164,
+          whatsapp_url: phoneResult.whatsapp_url,
+          validacao: phoneResult.validacao,
           email: validation.data.email || undefined
         };
       });
 
-      // Remover duplicatas dentro da planilha (manter primeira ocorrência)
-      const phoneSet = new Set<string>();
+      // Remover duplicatas dentro da planilha usando E.164 (manter primeira ocorrência)
+      const e164Set = new Set<string>();
       const uniqueParsedLeads: typeof parsedLeads = [];
       let duplicatesInFile = 0;
       for (const lead of parsedLeads) {
-        if (phoneSet.has(lead.telefone)) {
+        if (e164Set.has(lead.e164)) {
           duplicatesInFile++;
           continue;
         }
-        phoneSet.add(lead.telefone);
+        e164Set.add(lead.e164);
         uniqueParsedLeads.push(lead);
       }
       setImportedLeads(uniqueParsedLeads);

@@ -2,7 +2,7 @@ import { ReactNode } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
-import { LayoutDashboard, Upload, Phone, History, Users, FolderOpen, Send, BarChart3, AlertCircle, UserX, PhoneOff, LogOut } from "lucide-react";
+import { LayoutDashboard, Upload, Phone, History, Users, FolderOpen, Send, BarChart3, AlertCircle, UserX, PhoneOff, LogOut, Database } from "lucide-react";
 import { cn } from "@/lib/utils";
 export function Layout({
   children
@@ -73,6 +73,11 @@ export function Layout({
     path: "/nao-atendidos",
     label: "Não Atendidos",
     icon: PhoneOff,
+    roles: ["admin"]
+  }, {
+    path: "/backfill-telefones",
+    label: "Normalizar Telefones",
+    icon: Database,
     roles: ["admin"]
   }];
   const filteredNavItems = navItems.filter(item => user && item.roles.includes(user.role));

@@ -1,7 +1,12 @@
 import { z } from "zod";
+import { normalizarTelefone } from "@/lib/phoneNormalization";
 
-// Phone validation: accepts various formats, 10-15 digits
-const phoneRegex = /^[\d\s\-\(\)]{10,20}$/;
+// Phone validation using normalization
+const phoneRefine = (val: string) => {
+  if (!val) return false;
+  const result = normalizarTelefone(val);
+  return result.validacao !== "invalido";
+};
 
 // Lead validation schema
 export const leadSchema = z.object({
@@ -14,7 +19,9 @@ export const leadSchema = z.object({
   telefone: z
     .string()
     .trim()
-    .regex(phoneRegex, "Telefone inválido. Use formato: (11) 99999-9999"),
+    .refine(phoneRefine, {
+      message: "Telefone inválido. Use formato: (11) 99999-9999 ou similar"
+    }),
   email: z
     .string()
     .trim()
@@ -41,7 +48,9 @@ export const userSchema = z.object({
   telefone: z
     .string()
     .trim()
-    .regex(phoneRegex, "Telefone inválido")
+    .refine(phoneRefine, {
+      message: "Telefone inválido"
+    })
     .optional()
     .or(z.literal("")),
   role: z.enum(["admin", "gestor", "corretor"]),

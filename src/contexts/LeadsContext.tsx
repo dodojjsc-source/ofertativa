@@ -2,6 +2,7 @@ import { createContext, useContext, useState, ReactNode, useEffect } from "react
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./AuthContext";
 import { toast } from "@/hooks/use-toast";
+import { normalizarTelefone } from "@/lib/phoneNormalization";
 
 export type FeedbackType = "interessado" | "agendado" | "recusou" | "optout" | "numero_errado" | "nao_atendeu";
 
@@ -9,6 +10,16 @@ export interface Lead {
   id: string;
   nome: string;
   telefone: string;
+  telefone_raw?: string;
+  ddi?: string;
+  ddd?: string | null;
+  numero_core?: string;
+  is_mobile?: boolean;
+  e164?: string;
+  display_local?: string;
+  whatsapp_url?: string;
+  validacao?: "ok" | "incompleto" | "invalido";
+  motivo_validacao?: string | null;
   email?: string;
   campanha: string;
   campanhaId?: string;
@@ -102,6 +113,16 @@ export function LeadsProvider({ children }: { children: ReactNode }) {
         id: lead.id,
         nome: lead.nome,
         telefone: lead.telefone,
+        telefone_raw: lead.telefone_raw,
+        ddi: lead.ddi,
+        ddd: lead.ddd,
+        numero_core: lead.numero_core,
+        is_mobile: lead.is_mobile,
+        e164: lead.e164,
+        display_local: lead.display_local,
+        whatsapp_url: lead.whatsapp_url,
+        validacao: lead.validacao,
+        motivo_validacao: lead.motivo_validacao,
         email: lead.email || undefined,
         campanha: lead.campanhas?.nome || "Sem campanha",
         campanhaId: lead.campanha_id || undefined,
@@ -130,31 +151,50 @@ export function LeadsProvider({ children }: { children: ReactNode }) {
 
   const addLeads = async (newLeads: Omit<Lead, "id">[]) => {
     try {
-      // Remover duplicatas internas no batch (manter primeira ocorrência)
-      const phoneSet = new Set<string>();
-      const internallyUniqueLeads = newLeads.filter(lead => {
-        if (phoneSet.has(lead.telefone)) {
+      // Normalizar telefones primeiro
+      const normalizedLeads = newLeads.map(lead => {
+        const result = normalizarTelefone(lead.telefone);
+        return {
+          ...lead,
+          telefone_raw: lead.telefone,
+          telefone: result.display_local || lead.telefone,
+          ddi: result.ddi,
+          ddd: result.ddd,
+          numero_core: result.numero_core,
+          is_mobile: result.is_mobile,
+          e164: result.e164,
+          display_local: result.display_local,
+          whatsapp_url: result.whatsapp_url,
+          validacao: result.validacao,
+          motivo_validacao: result.motivo_validacao,
+        };
+      });
+
+      // Remover duplicatas internas no batch usando E.164 (manter primeira ocorrência)
+      const e164Set = new Set<string>();
+      const internallyUniqueLeads = normalizedLeads.filter(lead => {
+        if (!lead.e164 || e164Set.has(lead.e164)) {
           return false;
         }
-        phoneSet.add(lead.telefone);
+        e164Set.add(lead.e164);
         return true;
       });
 
       const internalDuplicates = newLeads.length - internallyUniqueLeads.length;
 
-      // Verificar duplicatas por telefone + campanha antes de inserir
-      const telefones = internallyUniqueLeads.map(l => l.telefone);
+      // Verificar duplicatas por E.164 + campanha antes de inserir
+      const e164s = internallyUniqueLeads.map(l => l.e164).filter(Boolean);
       const campanhaId = internallyUniqueLeads[0]?.campanhaId;
       
-      if (campanhaId) {
+      if (campanhaId && e164s.length > 0) {
         const { data: existingLeads } = await supabase
           .from("leads")
-          .select("telefone")
+          .select("e164")
           .eq("campanha_id", campanhaId)
-          .in("telefone", telefones);
+          .in("e164", e164s);
         
-        const existingPhones = new Set(existingLeads?.map(l => l.telefone) || []);
-        const uniqueLeads = internallyUniqueLeads.filter(l => !existingPhones.has(l.telefone));
+        const existingE164s = new Set(existingLeads?.map(l => l.e164) || []);
+        const uniqueLeads = internallyUniqueLeads.filter(l => !existingE164s.has(l.e164));
         
         if (uniqueLeads.length === 0) {
           toast({
@@ -168,6 +208,16 @@ export function LeadsProvider({ children }: { children: ReactNode }) {
         const dbLeads = uniqueLeads.map((lead) => ({
           nome: lead.nome,
           telefone: lead.telefone,
+          telefone_raw: lead.telefone_raw,
+          ddi: lead.ddi,
+          ddd: lead.ddd,
+          numero_core: lead.numero_core,
+          is_mobile: lead.is_mobile,
+          e164: lead.e164,
+          display_local: lead.display_local,
+          whatsapp_url: lead.whatsapp_url,
+          validacao: lead.validacao,
+          motivo_validacao: lead.motivo_validacao,
           email: lead.email,
           campanha_id: lead.campanhaId,
           corretor_id: lead.corretorId,
@@ -205,6 +255,16 @@ export function LeadsProvider({ children }: { children: ReactNode }) {
         const dbLeads = internallyUniqueLeads.map((lead) => ({
           nome: lead.nome,
           telefone: lead.telefone,
+          telefone_raw: lead.telefone_raw,
+          ddi: lead.ddi,
+          ddd: lead.ddd,
+          numero_core: lead.numero_core,
+          is_mobile: lead.is_mobile,
+          e164: lead.e164,
+          display_local: lead.display_local,
+          whatsapp_url: lead.whatsapp_url,
+          validacao: lead.validacao,
+          motivo_validacao: lead.motivo_validacao,
           email: lead.email,
           campanha_id: lead.campanhaId,
           corretor_id: lead.corretorId,

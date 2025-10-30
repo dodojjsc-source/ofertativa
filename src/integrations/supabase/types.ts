@@ -77,47 +77,77 @@ export type Database = {
         Row: {
           campanha_id: string | null
           corretor_id: string | null
+          ddd: string | null
+          ddi: string | null
+          display_local: string | null
+          e164: string | null
           feedback: Database["public"]["Enums"]["feedback_type"] | null
           gestor_id: string | null
           id: string
+          is_mobile: boolean | null
           lead_id: string
+          motivo_validacao: string | null
           nome: string
+          numero_core: string | null
           observacao: string | null
           processado_por: string | null
           status_fila: Database["public"]["Enums"]["bitrix_status"]
           telefone: string
+          telefone_raw: string | null
           timestamp_criacao: string
           timestamp_processamento: string | null
+          validacao: string | null
+          whatsapp_url: string | null
         }
         Insert: {
           campanha_id?: string | null
           corretor_id?: string | null
+          ddd?: string | null
+          ddi?: string | null
+          display_local?: string | null
+          e164?: string | null
           feedback?: Database["public"]["Enums"]["feedback_type"] | null
           gestor_id?: string | null
           id?: string
+          is_mobile?: boolean | null
           lead_id: string
+          motivo_validacao?: string | null
           nome: string
+          numero_core?: string | null
           observacao?: string | null
           processado_por?: string | null
           status_fila?: Database["public"]["Enums"]["bitrix_status"]
           telefone: string
+          telefone_raw?: string | null
           timestamp_criacao?: string
           timestamp_processamento?: string | null
+          validacao?: string | null
+          whatsapp_url?: string | null
         }
         Update: {
           campanha_id?: string | null
           corretor_id?: string | null
+          ddd?: string | null
+          ddi?: string | null
+          display_local?: string | null
+          e164?: string | null
           feedback?: Database["public"]["Enums"]["feedback_type"] | null
           gestor_id?: string | null
           id?: string
+          is_mobile?: boolean | null
           lead_id?: string
+          motivo_validacao?: string | null
           nome?: string
+          numero_core?: string | null
           observacao?: string | null
           processado_por?: string | null
           status_fila?: Database["public"]["Enums"]["bitrix_status"]
           telefone?: string
+          telefone_raw?: string | null
           timestamp_criacao?: string
           timestamp_processamento?: string | null
+          validacao?: string | null
+          whatsapp_url?: string | null
         }
         Relationships: [
           {
@@ -197,46 +227,124 @@ export type Database = {
           campanha_id: string | null
           corretor_id: string | null
           created_at: string
+          ddd: string | null
+          ddi: string | null
+          display_local: string | null
+          e164: string | null
           email: string | null
           flagged_at: string
           flagged_by: string | null
           gestor_id: string | null
           id: string
+          is_mobile: boolean | null
+          motivo_validacao: string | null
           nome: string
+          numero_core: string | null
           observacao: string | null
           original_lead_id: string
           reason: string
           telefone: string
+          telefone_raw: string | null
+          validacao: string | null
+          whatsapp_url: string | null
         }
         Insert: {
           campanha_id?: string | null
           corretor_id?: string | null
           created_at?: string
+          ddd?: string | null
+          ddi?: string | null
+          display_local?: string | null
+          e164?: string | null
           email?: string | null
           flagged_at?: string
           flagged_by?: string | null
           gestor_id?: string | null
           id?: string
+          is_mobile?: boolean | null
+          motivo_validacao?: string | null
           nome: string
+          numero_core?: string | null
           observacao?: string | null
           original_lead_id: string
           reason?: string
           telefone: string
+          telefone_raw?: string | null
+          validacao?: string | null
+          whatsapp_url?: string | null
         }
         Update: {
           campanha_id?: string | null
           corretor_id?: string | null
           created_at?: string
+          ddd?: string | null
+          ddi?: string | null
+          display_local?: string | null
+          e164?: string | null
           email?: string | null
           flagged_at?: string
           flagged_by?: string | null
           gestor_id?: string | null
           id?: string
+          is_mobile?: boolean | null
+          motivo_validacao?: string | null
           nome?: string
+          numero_core?: string | null
           observacao?: string | null
           original_lead_id?: string
           reason?: string
           telefone?: string
+          telefone_raw?: string | null
+          validacao?: string | null
+          whatsapp_url?: string | null
+        }
+        Relationships: []
+      }
+      jobs_telefone_normalizacao: {
+        Row: {
+          amostra_issues_json: Json | null
+          created_at: string
+          executado_por: string | null
+          finished_at: string | null
+          id: string
+          incompleto: number | null
+          invalido: number | null
+          ok: number | null
+          parametros_json: Json | null
+          started_at: string
+          tipo: string
+          total_processados: number | null
+          vazios: number | null
+        }
+        Insert: {
+          amostra_issues_json?: Json | null
+          created_at?: string
+          executado_por?: string | null
+          finished_at?: string | null
+          id?: string
+          incompleto?: number | null
+          invalido?: number | null
+          ok?: number | null
+          parametros_json?: Json | null
+          started_at?: string
+          tipo: string
+          total_processados?: number | null
+          vazios?: number | null
+        }
+        Update: {
+          amostra_issues_json?: Json | null
+          created_at?: string
+          executado_por?: string | null
+          finished_at?: string | null
+          id?: string
+          incompleto?: number | null
+          invalido?: number | null
+          ok?: number | null
+          parametros_json?: Json | null
+          started_at?: string
+          tipo?: string
+          total_processados?: number | null
+          vazios?: number | null
         }
         Relationships: []
       }
@@ -246,51 +354,81 @@ export type Database = {
           corretor_id: string | null
           created_at: string
           data_atendimento: string | null
+          ddd: string | null
+          ddi: string | null
+          display_local: string | null
+          e164: string | null
           email: string | null
           feedback: Database["public"]["Enums"]["feedback_type"] | null
           gestor_id: string | null
           id: string
+          is_mobile: boolean | null
+          motivo_validacao: string | null
           nome: string
+          numero_core: string | null
           observacao: string | null
           repassar_bitrix: boolean | null
           status: Database["public"]["Enums"]["lead_status"]
           telefone: string
+          telefone_raw: string | null
           tentativas_contato: number
           updated_at: string
+          validacao: string | null
+          whatsapp_url: string | null
         }
         Insert: {
           campanha_id?: string | null
           corretor_id?: string | null
           created_at?: string
           data_atendimento?: string | null
+          ddd?: string | null
+          ddi?: string | null
+          display_local?: string | null
+          e164?: string | null
           email?: string | null
           feedback?: Database["public"]["Enums"]["feedback_type"] | null
           gestor_id?: string | null
           id?: string
+          is_mobile?: boolean | null
+          motivo_validacao?: string | null
           nome: string
+          numero_core?: string | null
           observacao?: string | null
           repassar_bitrix?: boolean | null
           status?: Database["public"]["Enums"]["lead_status"]
           telefone: string
+          telefone_raw?: string | null
           tentativas_contato?: number
           updated_at?: string
+          validacao?: string | null
+          whatsapp_url?: string | null
         }
         Update: {
           campanha_id?: string | null
           corretor_id?: string | null
           created_at?: string
           data_atendimento?: string | null
+          ddd?: string | null
+          ddi?: string | null
+          display_local?: string | null
+          e164?: string | null
           email?: string | null
           feedback?: Database["public"]["Enums"]["feedback_type"] | null
           gestor_id?: string | null
           id?: string
+          is_mobile?: boolean | null
+          motivo_validacao?: string | null
           nome?: string
+          numero_core?: string | null
           observacao?: string | null
           repassar_bitrix?: boolean | null
           status?: Database["public"]["Enums"]["lead_status"]
           telefone?: string
+          telefone_raw?: string | null
           tentativas_contato?: number
           updated_at?: string
+          validacao?: string | null
+          whatsapp_url?: string | null
         }
         Relationships: [
           {
@@ -322,48 +460,78 @@ export type Database = {
           campanha_nome: string | null
           corretor_id: string | null
           created_at: string
+          ddd: string | null
+          ddi: string | null
+          display_local: string | null
+          e164: string | null
           email: string | null
           flagged_at: string
           flagged_by: string | null
           gestor_id: string | null
           id: string
+          is_mobile: boolean | null
+          motivo_validacao: string | null
           nome: string
+          numero_core: string | null
           observacao: string | null
           original_lead_id: string
           telefone: string
+          telefone_raw: string | null
           tentativas_contato: number
+          validacao: string | null
+          whatsapp_url: string | null
         }
         Insert: {
           campanha_id?: string | null
           campanha_nome?: string | null
           corretor_id?: string | null
           created_at?: string
+          ddd?: string | null
+          ddi?: string | null
+          display_local?: string | null
+          e164?: string | null
           email?: string | null
           flagged_at?: string
           flagged_by?: string | null
           gestor_id?: string | null
           id?: string
+          is_mobile?: boolean | null
+          motivo_validacao?: string | null
           nome: string
+          numero_core?: string | null
           observacao?: string | null
           original_lead_id: string
           telefone: string
+          telefone_raw?: string | null
           tentativas_contato?: number
+          validacao?: string | null
+          whatsapp_url?: string | null
         }
         Update: {
           campanha_id?: string | null
           campanha_nome?: string | null
           corretor_id?: string | null
           created_at?: string
+          ddd?: string | null
+          ddi?: string | null
+          display_local?: string | null
+          e164?: string | null
           email?: string | null
           flagged_at?: string
           flagged_by?: string | null
           gestor_id?: string | null
           id?: string
+          is_mobile?: boolean | null
+          motivo_validacao?: string | null
           nome?: string
+          numero_core?: string | null
           observacao?: string | null
           original_lead_id?: string
           telefone?: string
+          telefone_raw?: string | null
           tentativas_contato?: number
+          validacao?: string | null
+          whatsapp_url?: string | null
         }
         Relationships: []
       }
@@ -372,43 +540,73 @@ export type Database = {
           campanha_id: string | null
           corretor_id: string | null
           created_at: string
+          ddd: string | null
+          ddi: string | null
+          display_local: string | null
+          e164: string | null
           email: string | null
           flagged_at: string
           flagged_by: string | null
           gestor_id: string | null
           id: string
+          is_mobile: boolean | null
+          motivo_validacao: string | null
           nome: string
+          numero_core: string | null
           observacao: string | null
           original_lead_id: string
           telefone: string
+          telefone_raw: string | null
+          validacao: string | null
+          whatsapp_url: string | null
         }
         Insert: {
           campanha_id?: string | null
           corretor_id?: string | null
           created_at?: string
+          ddd?: string | null
+          ddi?: string | null
+          display_local?: string | null
+          e164?: string | null
           email?: string | null
           flagged_at?: string
           flagged_by?: string | null
           gestor_id?: string | null
           id?: string
+          is_mobile?: boolean | null
+          motivo_validacao?: string | null
           nome: string
+          numero_core?: string | null
           observacao?: string | null
           original_lead_id: string
           telefone: string
+          telefone_raw?: string | null
+          validacao?: string | null
+          whatsapp_url?: string | null
         }
         Update: {
           campanha_id?: string | null
           corretor_id?: string | null
           created_at?: string
+          ddd?: string | null
+          ddi?: string | null
+          display_local?: string | null
+          e164?: string | null
           email?: string | null
           flagged_at?: string
           flagged_by?: string | null
           gestor_id?: string | null
           id?: string
+          is_mobile?: boolean | null
+          motivo_validacao?: string | null
           nome?: string
+          numero_core?: string | null
           observacao?: string | null
           original_lead_id?: string
           telefone?: string
+          telefone_raw?: string | null
+          validacao?: string | null
+          whatsapp_url?: string | null
         }
         Relationships: []
       }
