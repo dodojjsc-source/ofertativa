@@ -36,6 +36,28 @@ export default function BackfillTelefones() {
     setProgress({ total: 0, ok: 0, incompleto: 0, invalido: 0 });
 
     try {
+      // Contar quantos registros precisam ser processados
+      const { count, error: countError } = await supabase
+        .from(selectedTable)
+        .select('*', { count: 'exact', head: true })
+        .is('e164', null);
+
+      if (countError) throw countError;
+
+      toast({
+        title: "📊 Iniciando normalização",
+        description: `${count || 0} registros precisam ser processados na tabela ${selectedTable}`,
+      });
+
+      if (count === 0) {
+        toast({
+          title: "✅ Nada para processar",
+          description: `Todos os registros da tabela ${selectedTable} já estão normalizados!`,
+        });
+        setIsRunning(false);
+        return;
+      }
+
       const BATCH_SIZE = 100;
       let processedCount = 0;
       let hasMore = true;
@@ -45,7 +67,7 @@ export default function BackfillTelefones() {
         const { data: records, error: fetchError } = await supabase
           .from(selectedTable)
           .select('id, telefone, telefone_raw')
-          .or('e164.is.null,e164.eq.')
+          .is('e164', null)
           .limit(BATCH_SIZE) as any;
 
         if (fetchError) throw fetchError;
@@ -99,6 +121,9 @@ export default function BackfillTelefones() {
           incompleto: prev.incompleto + batchIncompleto,
           invalido: prev.invalido + batchInvalido,
         }));
+
+        // Log para debug
+        console.log(`Lote processado: ${records.length} registros | OK: ${batchOk} | Incompletos: ${batchIncompleto} | Inválidos: ${batchInvalido}`);
 
         // Se processamos menos que o BATCH_SIZE, não há mais registros
         if (records.length < BATCH_SIZE) {
