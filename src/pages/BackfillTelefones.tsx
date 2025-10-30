@@ -4,16 +4,20 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import { Database, Play, CheckCircle, AlertCircle } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { normalizarTelefone } from "@/lib/phoneNormalization";
+
+type TableName = "leads" | "optout_contacts" | "contatos_errados" | "nao_atendidos" | "bitrix_queue";
 
 export default function BackfillTelefones() {
   const { user } = useAuth();
   const [isRunning, setIsRunning] = useState(false);
   const [progress, setProgress] = useState({ total: 0, ok: 0, incompleto: 0, invalido: 0 });
-  const [selectedTable, setSelectedTable] = useState("leads");
+  const [selectedTable, setSelectedTable] = useState<TableName>("leads");
 
   if (user?.role !== "admin") {
     return (
@@ -32,41 +36,91 @@ export default function BackfillTelefones() {
     setProgress({ total: 0, ok: 0, incompleto: 0, invalido: 0 });
 
     try {
-      let cursor = null;
+      const BATCH_SIZE = 100;
+      let processedCount = 0;
       let hasMore = true;
-      let batchCount = 0;
 
       while (hasMore) {
-        const { data, error } = await supabase.functions.invoke("backfill-telefones", {
-          body: { table: selectedTable, batchSize: 1000, cursor },
-        });
+        // Buscar registros que precisam ser normalizados
+        const { data: records, error: fetchError } = await supabase
+          .from(selectedTable)
+          .select('id, telefone, telefone_raw')
+          .or('e164.is.null,e164.eq.')
+          .limit(BATCH_SIZE) as any;
 
-        if (error) throw error;
+        if (fetchError) throw fetchError;
+        if (!records || records.length === 0) {
+          hasMore = false;
+          break;
+        }
 
-        batchCount++;
+        // Processar cada registro
+        let batchOk = 0;
+        let batchIncompleto = 0;
+        let batchInvalido = 0;
+
+        for (const record of records) {
+          const telefoneInput = record.telefone_raw || record.telefone;
+          const result = normalizarTelefone(telefoneInput);
+
+          // Atualizar no banco
+          const { error: updateError } = await supabase
+            .from(selectedTable)
+            .update({
+              ddi: result.ddi,
+              ddd: result.ddd,
+              numero_core: result.numero_core,
+              e164: result.e164,
+              display_local: result.display_local,
+              whatsapp_url: result.whatsapp_url,
+              is_mobile: result.is_mobile,
+              validacao: result.validacao,
+              motivo_validacao: result.motivo_validacao,
+            } as any)
+            .eq('id', record.id);
+
+          if (updateError) {
+            console.error(`Erro ao atualizar registro ${record.id}:`, updateError);
+            continue;
+          }
+
+          // Contar por status
+          if (result.validacao === 'ok') batchOk++;
+          else if (result.validacao === 'incompleto') batchIncompleto++;
+          else batchInvalido++;
+
+          processedCount++;
+        }
+
+        // Atualizar progresso
         setProgress((prev) => ({
-          total: prev.total + data.processed,
-          ok: prev.ok + data.ok,
-          incompleto: prev.incompleto + data.incompleto,
-          invalido: prev.invalido + data.invalido,
+          total: prev.total + records.length,
+          ok: prev.ok + batchOk,
+          incompleto: prev.incompleto + batchIncompleto,
+          invalido: prev.invalido + batchInvalido,
         }));
 
-        cursor = data.nextCursor;
-        hasMore = data.nextCursor !== null;
+        // Se processamos menos que o BATCH_SIZE, não há mais registros
+        if (records.length < BATCH_SIZE) {
+          hasMore = false;
+        }
 
-        toast({
-          title: `Lote ${batchCount} processado`,
-          description: `${data.processed} registros normalizados`,
-        });
+        // Feedback a cada lote
+        if (processedCount % 100 === 0) {
+          toast({
+            title: `Processados ${processedCount} registros`,
+            description: `OK: ${batchOk} | Incompletos: ${batchIncompleto} | Inválidos: ${batchInvalido}`,
+          });
+        }
       }
 
       toast({
-        title: "✅ Backfill concluído",
-        description: `Total: ${progress.total} | OK: ${progress.ok} | Incompletos: ${progress.incompleto} | Inválidos: ${progress.invalido}`,
+        title: "✅ Normalização concluída",
+        description: `Total: ${processedCount} registros processados`,
       });
     } catch (error: any) {
       toast({
-        title: "Erro no backfill",
+        title: "Erro na normalização",
         description: error.message,
         variant: "destructive",
       });
@@ -95,7 +149,11 @@ export default function BackfillTelefones() {
           <CardContent className="space-y-4">
             <div>
               <label className="block text-sm font-medium mb-2">Tabela para Processar</label>
-              <Select value={selectedTable} onValueChange={setSelectedTable} disabled={isRunning}>
+              <Select 
+                value={selectedTable} 
+                onValueChange={(value) => setSelectedTable(value as TableName)} 
+                disabled={isRunning}
+              >
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -126,11 +184,18 @@ export default function BackfillTelefones() {
             </Button>
 
             {progress.total > 0 && (
-              <div className="space-y-3 pt-4 border-t">
-                <div className="flex justify-between text-sm font-medium">
-                  <span>Total processados:</span>
-                  <span>{progress.total}</span>
+              <div className="space-y-4 pt-4 border-t">
+                <div>
+                  <div className="flex justify-between text-sm font-medium mb-2">
+                    <span>Progresso</span>
+                    <span>{progress.total} registros</span>
+                  </div>
+                  <Progress 
+                    value={isRunning ? 50 : 100} 
+                    className="h-2"
+                  />
                 </div>
+                
                 <div className="grid grid-cols-3 gap-2">
                   <Badge variant="default" className="justify-center py-2">
                     <CheckCircle className="mr-1 h-3 w-3" />
@@ -143,6 +208,7 @@ export default function BackfillTelefones() {
                     Inválido: {progress.invalido}
                   </Badge>
                 </div>
+                
                 {progress.total > 0 && (
                   <div className="text-sm text-muted-foreground text-center">
                     Taxa de sucesso: {((progress.ok / progress.total) * 100).toFixed(1)}%
