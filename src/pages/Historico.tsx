@@ -2,6 +2,7 @@ import { Layout } from "@/components/Layout";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLeads } from "@/contexts/LeadsContext";
 import { useFilters } from "@/contexts/FiltersContext";
+import { useUsers } from "@/contexts/UsersContext";
 import { FiltersCard } from "@/components/FiltersCard";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -15,6 +16,7 @@ export default function Historico() {
   const { user } = useAuth();
   const { leads, getLeadsByCorretor, getLeadsByGestor, deleteLead } = useLeads();
   const { filters } = useFilters();
+  const { users } = useUsers();
 
   const getFilteredLeads = () => {
     let filtered = leads.filter((l) => l.status === "atendido");
@@ -34,7 +36,9 @@ export default function Historico() {
       filtered = filtered.filter((l) => l.corretorId === filters.corretorId);
     }
     if (filters.campanha) {
-      filtered = filtered.filter((l) => l.campanha === filters.campanha);
+      filtered = filtered.filter((l) => 
+        l.campanha?.toLowerCase().trim() === filters.campanha?.toLowerCase().trim()
+      );
     }
     if (filters.feedback) {
       filtered = filtered.filter((l) => l.feedback === filters.feedback);
@@ -102,6 +106,7 @@ export default function Historico() {
                 <TableRow>
                   <TableHead>Nome</TableHead>
                   <TableHead>Telefone</TableHead>
+                  <TableHead>Corretor</TableHead>
                   <TableHead>Campanha</TableHead>
                   <TableHead>Feedback</TableHead>
                   <TableHead>Bitrix</TableHead>
@@ -112,7 +117,7 @@ export default function Historico() {
               <TableBody>
                 {filteredLeads.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
+                    <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
                       Nenhum atendimento registrado
                     </TableCell>
                   </TableRow>
@@ -122,6 +127,9 @@ export default function Historico() {
                       <TableCell className="font-medium">{lead.nome}</TableCell>
                       <TableCell>
                         <PhoneLink phone={lead.telefone} />
+                      </TableCell>
+                      <TableCell>
+                        {users.find(u => u.id === lead.corretorId)?.name || "Sem corretor"}
                       </TableCell>
                       <TableCell>{lead.campanha}</TableCell>
                       <TableCell>{getFeedbackBadge(lead.feedback)}</TableCell>

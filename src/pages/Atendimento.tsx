@@ -2,11 +2,13 @@ import { useState, useEffect } from "react";
 import { Layout } from "@/components/Layout";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLeads, FeedbackType } from "@/contexts/LeadsContext";
+import { useFilters } from "@/contexts/FiltersContext";
 import { useBitrixQueue } from "@/contexts/BitrixQueueContext";
 import { useUsers } from "@/contexts/UsersContext";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -19,6 +21,7 @@ import { PhoneLink } from "@/components/ui/phone-link";
 export default function Atendimento() {
   const { user } = useAuth();
   const { leads, updateLead } = useLeads();
+  const { filters, setFilters } = useFilters();
   const { addToQueue } = useBitrixQueue();
   const { users } = useUsers();
   const [currentLead, setCurrentLead] = useState<any>(null);
@@ -36,11 +39,18 @@ export default function Atendimento() {
     if (!user) return;
     if (showFeedbackModal) return; // não troca enquanto o modal está aberto
     loadNextLead();
-  }, [leads, user?.id, showFeedbackModal]);
+  }, [leads, user?.id, showFeedbackModal, filters.campanha]);
   const loadNextLead = (skipId?: string) => {
     if (!user) return;
     // Seleciona apenas pendentes do corretor atual
-    const pending = leads.filter((l) => l.corretorId === user.id && l.status === "pendente");
+    let pending = leads.filter((l) => l.corretorId === user.id && l.status === "pendente");
+    
+    // Aplicar filtro de campanha
+    if (filters.campanha) {
+      pending = pending.filter((l) => 
+        l.campanha?.toLowerCase().trim() === filters.campanha?.toLowerCase().trim()
+      );
+    }
 
     // Ordena por dataAtendimento (nulos primeiro), depois por nome (fallback estável)
     const sorted = [...pending].sort((a, b) => {
@@ -338,6 +348,37 @@ export default function Atendimento() {
           <h1 className="text-3xl font-bold">Atendimento Sequencial</h1>
           <p className="text-muted-foreground">Processe um contato por vez</p>
         </div>
+
+        <Card className="max-w-2xl mx-auto">
+          <CardHeader>
+            <CardTitle>Filtrar Leads</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              <Label>Campanha</Label>
+              <Select
+                value={filters.campanha || "all"}
+                onValueChange={(value) => 
+                  setFilters({ ...filters, campanha: value === "all" ? undefined : value })
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Todas as campanhas" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todas</SelectItem>
+                  {Array.from(new Set(leads
+                    .filter(l => l.corretorId === user?.id && l.status === "pendente")
+                    .map(l => l.campanha)
+                    .filter(Boolean)
+                  )).map(c => (
+                    <SelectItem key={c} value={c}>{c}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </CardContent>
+        </Card>
 
         <Card className="max-w-2xl mx-auto">
           <CardHeader>
