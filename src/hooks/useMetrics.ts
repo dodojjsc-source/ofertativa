@@ -233,13 +233,20 @@ export function useMetrics(filters: Filters) {
       return d >= startRange && d <= endRange;
     };
 
-    // KPIs gerais (APENAS feedbacks úteis contam como atendimento)
-    // Número errado e opt-out NÃO são atendimentos, apenas ligações realizadas
+    // KPIs gerais
+    // ATENDIMENTOS = leads que o corretor FALOU com alguém (interessado, agendado, recusou)
     const atendimentos = filteredLeads.filter(l => 
       l.status === "atendido" && 
-      l.feedback !== "numero_errado" &&
-      l.feedback !== "optout" &&
       ["interessado", "agendado", "recusou"].includes(l.feedback || "")
+    ).length;
+    
+    // NÚMERO ERRADO e OPT-OUT da tabela leads (para evitar duplicação)
+    const numerosErradosFromLeads = filteredLeads.filter(l => 
+      l.feedback === "numero_errado"
+    ).length;
+    
+    const optoutsFromLeads = filteredLeads.filter(l => 
+      l.feedback === "optout"
     ).length;
     
     // Contar TODAS as tentativas registradas, independente do status final
@@ -274,8 +281,20 @@ export function useMetrics(filters: Filters) {
       return acc;
     }, 0);
     
-    // Ligações = atendimentos úteis + não atendidos + opt-outs + números errados
-    const ligacoes = atendimentos + naoAtendimentos + (includeOptouts ? filteredOptouts.length : 0) + filteredContatosErrados.length;
+    // Total de números errados (evitando duplicação entre leads e tabela separada)
+    const totalNumerosErrados = numerosErradosFromLeads + 
+      filteredContatosErrados.filter(c => 
+        !filteredLeads.some(l => l.id === c.id)
+      ).length;
+    
+    // Total de opt-outs (evitando duplicação entre leads e tabela separada)
+    const totalOptouts = optoutsFromLeads + 
+      (includeOptouts ? filteredOptouts.filter(o => 
+        !filteredLeads.some(l => l.id === o.id)
+      ).length : 0);
+    
+    // LIGAÇÕES = atendimentos + não atendidos + números errados + opt-outs
+    const ligacoes = atendimentos + naoAtendimentos + totalNumerosErrados + totalOptouts;
     const taxaSucesso = ligacoes > 0 ? (atendimentos / ligacoes) * 100 : 0;
     const filaPendente = queue.filter(q => q.statusFila === "pendente").length;
 
@@ -325,12 +344,19 @@ export function useMetrics(filters: Filters) {
     const corretores = users.filter(u => u.role === "corretor" && u.status === "ativo");
     const rankingCorretores: CorretorMetrics[] = corretores.map(corretor => {
       const corretorLeads = filteredLeads.filter(l => l.corretorId === corretor.id);
-      // Atendimentos = APENAS feedbacks úteis (interessado, agendado, recusou)
+      // Atendimentos = leads que o corretor FALOU com alguém (interessado, agendado, recusou)
       const corretorAtendimentos = corretorLeads.filter(l => 
         l.status === "atendido" && 
-        l.feedback !== "numero_errado" &&
-        l.feedback !== "optout" &&
         ["interessado", "agendado", "recusou"].includes(l.feedback || "")
+      ).length;
+      
+      // Números errados e opt-outs deste corretor (da tabela leads)
+      const corretorNumerosErradosFromLeads = corretorLeads.filter(l => 
+        l.feedback === "numero_errado"
+      ).length;
+      
+      const corretorOptoutsFromLeads = corretorLeads.filter(l => 
+        l.feedback === "optout"
       ).length;
       // Contar tentativas de TODOS os leads (atendidos ou não)
       const corretorNaoAtendimentos = corretorLeads.reduce((acc, l) => {
@@ -356,10 +382,21 @@ export function useMetrics(filters: Filters) {
         return acc;
       }, 0);
       
-      // Ligações = atendimentos úteis + não atendidos + opt-outs + números errados deste corretor
-      const corretorOptouts = filteredOptouts.filter(o => o.corretorId === corretor.id).length;
-      const corretorNumerosErrados = filteredContatosErrados.filter(ce => ce.corretorId === corretor.id).length;
-      const corretorLigacoes = corretorAtendimentos + corretorNaoAtendimentos + corretorOptouts + corretorNumerosErrados;
+      // Total de números errados e opt-outs deste corretor (evitando duplicação)
+      const corretorOptoutsFromTable = filteredOptouts.filter(o => 
+        o.corretorId === corretor.id && 
+        !corretorLeads.some(l => l.id === o.id)
+      ).length;
+      const corretorNumerosErradosFromTable = filteredContatosErrados.filter(ce => 
+        ce.corretorId === corretor.id && 
+        !corretorLeads.some(l => l.id === ce.id)
+      ).length;
+      
+      const corretorTotalOptouts = corretorOptoutsFromLeads + corretorOptoutsFromTable;
+      const corretorTotalNumerosErrados = corretorNumerosErradosFromLeads + corretorNumerosErradosFromTable;
+      
+      // Ligações = atendimentos + não atendidos + números errados + opt-outs
+      const corretorLigacoes = corretorAtendimentos + corretorNaoAtendimentos + corretorTotalNumerosErrados + corretorTotalOptouts;
       const corretorTaxaSucesso = corretorLigacoes > 0 
         ? (corretorAtendimentos / corretorLigacoes) * 100 
         : 0;
@@ -387,7 +424,7 @@ export function useMetrics(filters: Filters) {
       ).length;
       const concluidosLote = corretorLeads.filter(l => 
         l.status === "atendido" || l.status === "nao_atendido"
-      ).length + corretorOptouts + corretorNumerosErrados;
+      ).length + corretorTotalOptouts + corretorTotalNumerosErrados;
       const percentualLote = atribuidosLote > 0 
         ? (concluidosLote / atribuidosLote) * 100 
         : 0;

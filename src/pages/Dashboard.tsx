@@ -161,13 +161,11 @@ export default function Dashboard() {
               <div className="space-y-2">
                 <div className="flex justify-between text-sm">
                   <span>Atendimentos</span>
-                  <span className="font-semibold">
-                    {metrics.atendimentos - metrics.dataQuality.optouts - metrics.dataQuality.numerosErrados}
-                  </span>
+                  <span className="font-semibold">{metrics.atendimentos}</span>
                 </div>
                 <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
-                  <div className="h-full bg-primary" style={{
-                  width: `${metrics.totalLeads > 0 ? (metrics.atendimentos - metrics.dataQuality.optouts - metrics.dataQuality.numerosErrados) / metrics.totalLeads * 100 : 0}%`
+                  <div className="h-full bg-green-500" style={{
+                  width: `${metrics.totalLeads > 0 ? metrics.atendimentos / metrics.totalLeads * 100 : 0}%`
                 }} />
                 </div>
               </div>
