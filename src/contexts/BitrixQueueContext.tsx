@@ -12,6 +12,9 @@ export interface BitrixQueueItem {
   campanhaNome: string;
   nome: string;
   telefone: string;
+  e164?: string;
+  displayLocal?: string;
+  whatsappUrl?: string;
   email?: string;
   corretorId: string;
   corretorNome: string;
@@ -68,6 +71,9 @@ export function BitrixQueueProvider({ children }: { children: ReactNode }) {
         campanhaNome: item.campanha?.nome || "",
         nome: item.nome,
         telefone: item.telefone,
+        e164: item.e164 || undefined,
+        displayLocal: item.display_local || undefined,
+        whatsappUrl: item.whatsapp_url || undefined,
         email: undefined,
         corretorId: item.corretor_id || "",
         corretorNome: item.corretor?.name || "",
@@ -197,6 +203,9 @@ export function BitrixQueueProvider({ children }: { children: ReactNode }) {
       "campanha",
       "nome",
       "telefone",
+      "e164",
+      "displayLocal",
+      "whatsappUrl",
       "corretor",
       "gestor",
       "feedback",
@@ -211,6 +220,9 @@ export function BitrixQueueProvider({ children }: { children: ReactNode }) {
       item.campanhaNome || "",
       item.nome || "",
       item.telefone || "",
+      item.e164 || "",
+      item.displayLocal || "",
+      item.whatsappUrl || "",
       item.corretorNome || "",
       item.gestorNome || "",
       item.feedback || "",

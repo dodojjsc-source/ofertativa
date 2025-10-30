@@ -38,7 +38,13 @@ export function BitrixQueueTable() {
                 <TableRow key={item.id}>
                   <TableCell>{item.nome}</TableCell>
                   <TableCell>
-                    <PhoneLink phone={item.telefone} />
+                    <PhoneLink 
+                      phone={item.telefone}
+                      e164={item.e164}
+                      display={item.displayLocal}
+                      whatsappUrl={item.whatsappUrl}
+                      showWhatsApp
+                    />
                   </TableCell>
                   <TableCell className="text-xs">{item.campanhaId}</TableCell>
                   <TableCell>

@@ -7,6 +7,7 @@ interface PhoneLinkProps {
   phone?: string;
   e164?: string;
   whatsappUrl?: string;
+  display?: string;
   className?: string;
   showIcon?: boolean;
   showWhatsApp?: boolean;
@@ -16,12 +17,28 @@ export function PhoneLink({
   phone, 
   e164, 
   whatsappUrl, 
+  display,
   className, 
   showIcon = true,
   showWhatsApp = false 
 }: PhoneLinkProps) {
-  const displayPhone = phone || e164 || "";
-  const telLink = e164 || `tel:+55${phone?.replace(/\D/g, '')}`;
+  // Sanitize display (remove quotes)
+  const displayPhone = (display || e164 || phone || "").replace(/^['"]+|['"]+$/g, "");
+  
+  // Build tel link - prefer e164, fallback to robust digit parsing
+  let telLink: string;
+  if (e164) {
+    telLink = `tel:${e164}`;
+  } else {
+    const digits = (phone || "").replace(/\D/g, "");
+    if (digits.startsWith("55") && digits.length >= 12) {
+      telLink = `tel:+${digits}`;
+    } else if (digits.length === 11 || digits.length === 10) {
+      telLink = `tel:+55${digits}`;
+    } else {
+      telLink = `tel:+${digits}`;
+    }
+  }
   
   const handleClick = (e: React.MouseEvent) => {
     if (window.innerWidth > 768) {

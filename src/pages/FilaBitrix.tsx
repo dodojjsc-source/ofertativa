@@ -67,6 +67,8 @@ export default function FilaBitrix() {
         (item) =>
           item.nome.toLowerCase().includes(search) ||
           item.telefone.includes(search) ||
+          item.e164?.includes(search) ||
+          item.displayLocal?.toLowerCase().includes(search) ||
           item.email?.toLowerCase().includes(search)
       );
     }
@@ -416,7 +418,13 @@ export default function FilaBitrix() {
                       </TableCell>
                       <TableCell className="font-medium">{item.nome}</TableCell>
                       <TableCell>
-                        <PhoneLink phone={item.telefone} />
+                        <PhoneLink 
+                          phone={item.telefone}
+                          e164={item.e164}
+                          display={item.displayLocal}
+                          whatsappUrl={item.whatsappUrl}
+                          showWhatsApp
+                        />
                       </TableCell>
                       <TableCell>{item.corretorNome}</TableCell>
                       <TableCell>{item.gestorNome}</TableCell>
