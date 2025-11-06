@@ -6,6 +6,7 @@ import { useLeads } from "@/contexts/LeadsContext";
 import { useUsers, AppUser } from "@/contexts/UsersContext";
 import { useAssignments } from "@/contexts/AssignmentsContext";
 import { useCampanhas } from "@/contexts/CampanhasContext";
+import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -423,12 +424,19 @@ export default function Upload() {
       }));
       await addLeads(leadsToSave);
 
-      // 3. Buscar pool de leads não atribuídos da campanha
-      const assignedSet = new Set(getAssignmentsByCampanha(campanhaId).map(a => a.leadId));
+      // 3. Buscar pool de leads da campanha diretamente do backend (não depende do estado global)
+      const { data: newLeads, error: fetchError } = await supabase
+        .from('leads')
+        .select('id')
+        .eq('campanha_id', campanhaId);
+      
+      if (fetchError) throw fetchError;
+      if (!newLeads || newLeads.length === 0) {
+        throw new Error("Não foi possível encontrar os leads inseridos");
+      }
 
-      // Recarregar leads para pegar os IDs recém-criados
-      await new Promise(resolve => setTimeout(resolve, 500)); // Aguardar sync
-      const pool = leads.filter(l => l.campanhaId === campanhaId && !assignedSet.has(l.id));
+      const assignedSet = new Set(getAssignmentsByCampanha(campanhaId).map(a => a.leadId));
+      const pool = newLeads.filter(l => !assignedSet.has(l.id));
 
       // 4. Distribuição round-robin
       const newAssignments: Array<{
@@ -440,11 +448,11 @@ export default function Upload() {
       const corretoresCount: Record<string, number> = {};
       selectedCorretores.forEach(id => corretoresCount[id] = 0);
       let corretorIndex = 0;
-      for (const lead of pool) {
+      for (const leadData of pool) {
         const corretorId = selectedCorretores[corretorIndex];
 
         // Verificar duplicidade
-        if (isLeadAssigned(campanhaId, lead.id)) continue;
+        if (isLeadAssigned(campanhaId, leadData.id)) continue;
 
         // Verificar se corretor já atingiu o limite
         if (corretoresCount[corretorId] >= loteSize) {
@@ -456,7 +464,7 @@ export default function Upload() {
         }
         newAssignments.push({
           campanhaId,
-          leadId: lead.id,
+          leadId: leadData.id,
           corretorId,
           statusDistribuicao: "pendente"
         });

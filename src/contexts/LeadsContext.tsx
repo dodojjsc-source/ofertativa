@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, ReactNode, useEffect } from "react";
+import { createContext, useContext, useState, useRef, ReactNode, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./AuthContext";
 import { toast } from "@/hooks/use-toast";
@@ -49,36 +49,53 @@ export function LeadsProvider({ children }: { children: ReactNode }) {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
   const { user } = useAuth();
+  
+  // Refs para debounce e mutex
+  const reloadTimer = useRef<number | null>(null);
+  const isLoadingRef = useRef(false);
 
   useEffect(() => {
     if (user) {
       loadLeads();
 
-      // Subscrever a mudanças em tempo real para sincronização automática
+      // Função de reload com debounce
+      const scheduleReload = () => {
+        if (reloadTimer.current) clearTimeout(reloadTimer.current);
+        reloadTimer.current = window.setTimeout(async () => {
+          if (isLoadingRef.current) return; // Mutex: ignora se já está carregando
+          await loadLeads();
+        }, 800); // Debounce de 800ms
+      };
+
+      // Subscrever a mudanças em tempo real
       const channel = supabase
         .channel('leads-changes')
         .on(
           'postgres_changes',
           {
-            event: '*', // INSERT, UPDATE, DELETE
+            event: '*',
             schema: 'public',
             table: 'leads'
           },
           () => {
-            console.log('Leads alterados, recarregando...');
-            loadLeads();
+            console.log('Leads alterados, agendando reload...');
+            scheduleReload();
           }
         )
         .subscribe();
 
       // Cleanup na desmontagem
       return () => {
+        if (reloadTimer.current) clearTimeout(reloadTimer.current);
         supabase.removeChannel(channel);
       };
     }
   }, [user]);
 
   const loadLeads = async () => {
+    if (isLoadingRef.current) return; // Mutex: evita paralelo
+    isLoadingRef.current = true;
+    
     try {
       // Buscar todos os leads com paginação (limite padrão do Supabase é 1000)
       let allLeads: any[] = [];
@@ -146,6 +163,7 @@ export function LeadsProvider({ children }: { children: ReactNode }) {
       });
     } finally {
       setLoading(false);
+      isLoadingRef.current = false; // Libera mutex
     }
   };
 
@@ -233,7 +251,7 @@ export function LeadsProvider({ children }: { children: ReactNode }) {
 
         if (error) throw error;
 
-        await loadLeads();
+        // Não recarregar aqui - deixar o realtime fazer com debounce
 
         const duplicatesCount = newLeads.length - uniqueLeads.length;
         const descriptionParts: string[] = [`${uniqueLeads.length} lead(s) adicionado(s)`];
@@ -280,7 +298,7 @@ export function LeadsProvider({ children }: { children: ReactNode }) {
 
         if (error) throw error;
 
-        await loadLeads();
+        // Não recarregar aqui - deixar o realtime fazer com debounce
         
         const descriptionParts: string[] = [`${internallyUniqueLeads.length} lead(s) adicionado(s) com sucesso`];
         if (internalDuplicates > 0) {
