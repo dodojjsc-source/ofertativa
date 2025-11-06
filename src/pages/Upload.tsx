@@ -330,7 +330,7 @@ export default function Upload() {
       // 1. Criar campanha no banco
       const campanhaId = await createCampanha(campanha, importedLeads.length);
       if (!campanhaId) {
-        throw new Error("Não foi possível criar a campanha");
+        throw new Error("Falha na criação da campanha. Verifique o console ou suas permissões.");
       }
 
       // 2. Salvar leads SEM corretor_id (null)
@@ -407,7 +407,7 @@ export default function Upload() {
       // 1. Criar campanha no banco
       const campanhaId = await createCampanha(campanha, importedLeads.length);
       if (!campanhaId) {
-        throw new Error("Não foi possível criar a campanha");
+        throw new Error("Falha na criação da campanha. Verifique o console ou suas permissões.");
       }
 
       // 2. Salvar leads COM corretor_id para distribuição imediata

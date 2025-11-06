@@ -70,40 +70,93 @@ export function CampanhasProvider({ children }: { children: ReactNode }) {
         throw new Error("Usuário não autenticado");
       }
 
+      // Determinar gestor_id com base na role
+      const insertData: any = {
+        nome,
+        total_leads: totalLeads,
+      };
+
+      // Apenas gestores devem ter gestor_id = self
+      // Admins criam campanhas sem gestor_id (null)
+      if (user.role === 'gestor') {
+        insertData.gestor_id = user.id;
+      }
+
       const { data, error } = await supabase
         .from("campanhas")
-        .insert({
-          nome,
-          total_leads: totalLeads,
-          gestor_id: user.id,
-        })
+        .insert(insertData)
         .select()
         .single();
 
       if (error) {
-        console.error("Erro ao criar campanha:", error);
+        console.error("Erro ao criar campanha (primeira tentativa):", {
+          code: error.code,
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+        });
+
+        // Retry para erros de RLS/FK: tentar sem gestor_id
+        if (
+          error.code === '23503' || // FK violation
+          error.message?.toLowerCase().includes('row-level security') ||
+          error.message?.toLowerCase().includes('permission denied')
+        ) {
+          console.log("Tentando retry sem gestor_id...");
+          
+          const { data: retryData, error: retryError } = await supabase
+            .from("campanhas")
+            .insert({ nome, total_leads: totalLeads })
+            .select()
+            .single();
+
+          if (retryError) {
+            console.error("Erro no retry:", {
+              code: retryError.code,
+              message: retryError.message,
+              details: retryError.details,
+            });
+            throw retryError;
+          }
+
+          await getCampanhas();
+          return retryData.id;
+        }
+
         throw error;
       }
 
       await getCampanhas();
       return data.id;
     } catch (error: any) {
-      console.error("Erro detalhado na criação de campanha:", error);
+      console.error("Erro final na criação de campanha:", {
+        code: error.code,
+        message: error.message,
+        details: error.details,
+        name: error.name,
+      });
       
-      // Mensagens de erro mais específicas
+      // Mensagens de erro mais específicas com código
       let errorMessage = error.message || "Não foi possível criar a campanha";
       
       if (error.code === "42501") {
-        errorMessage = "Permissão negada. Verifique suas credenciais de gestor.";
+        errorMessage = "Permissão negada. Verifique suas credenciais.";
+      } else if (error.code === "23503") {
+        errorMessage = "Erro de referência no banco. Entre em contato com o suporte.";
       } else if (error.message?.includes("violates row-level security policy")) {
-        errorMessage = "Você não tem permissão para criar campanhas. Entre em contato com o administrador.";
+        errorMessage = "Você não tem permissão para criar campanhas.";
       } else if (error.message === "Usuário não autenticado") {
         errorMessage = "Sessão expirada. Por favor, faça login novamente.";
       }
       
+      // Incluir código do erro para diagnóstico
+      const displayMessage = error.code 
+        ? `${errorMessage} (${error.code})`
+        : errorMessage;
+      
       toast({
-        title: "Erro",
-        description: errorMessage,
+        title: "Erro ao criar campanha",
+        description: displayMessage,
         variant: "destructive",
       });
       return null;
