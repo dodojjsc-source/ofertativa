@@ -18,13 +18,30 @@ import { z } from "zod";
 import { normalizarTelefone } from "@/lib/phoneNormalization";
 
 // Helpers para normalizar cabeçalhos e extrair telefones
-const normalizeHeader = (s: string) => s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, "").trim();
+const normalizeHeader = (s: string) => 
+  s.toLowerCase()
+   .normalize("NFD")
+   .replace(/[\u0300-\u036f]/g, "")
+   .replace(/[^a-z0-9]+/g, "")
+   .trim();
+
 const getCell = (row: any, candidates: string[]) => {
-  const map = Object.fromEntries(Object.keys(row).map(k => [normalizeHeader(k), row[k]]));
+  const norm = (s: string) => normalizeHeader(s);
+  const map = Object.fromEntries(Object.keys(row).map(k => [norm(k), row[k]]));
+  const keys = Object.keys(map);
+
+  // 1) Match exato (normalizado)
   for (const c of candidates) {
-    const v = map[normalizeHeader(c)];
-    if (v !== undefined) return v;
+    const key = norm(c);
+    if (map[key] !== undefined) return map[key];
   }
+  
+  // 2) Match por includes (prioridade por ordem do array)
+  for (const c of candidates) {
+    const key = keys.find(k => k.includes(norm(c)));
+    if (key) return map[key];
+  }
+  
   return undefined;
 };
 const extractFirstValidPhone = (raw: string): string | null => {
@@ -37,11 +54,12 @@ const extractFirstValidPhone = (raw: string): string | null => {
   }
   return null;
 };
-const leadSchema = z.object({
-  nome: z.string().trim().nonempty("Nome não pode estar vazio").max(100, "Nome muito longo"),
-  telefone: z.string().trim().nonempty("Telefone não pode estar vazio"),
-  email: z.string().trim().email("Email inválido").max(255, "Email muito longo").optional().or(z.literal(""))
+// Schema apenas para validar nome (telefone é validado por normalizarTelefone)
+const nameSchema = z.object({
+  nome: z.string().trim().min(2, "Nome deve ter pelo menos 2 caracteres").max(100, "Nome muito longo").regex(/^[a-zA-ZÀ-ÿ\s]+$/, "Nome deve conter apenas letras")
 });
+
+const emailSchema = z.string().trim().email("Email inválido").max(255, "Email muito longo").optional().or(z.literal(""));
 export default function Upload() {
   const {
     user
@@ -121,53 +139,120 @@ export default function Upload() {
       const worksheet = workbook.Sheets[sheetName];
       const jsonData = XLSX.utils.sheet_to_json<any>(worksheet);
 
-      // Validar e parsear dados com Zod + normalização de telefone
+      // Validar e parsear dados com importação tolerante
       let multiplePhoneCount = 0;
-      let invalidPhones = 0;
-      const parsedLeads = jsonData.map((row, index) => {
-        const rawNome = String(getCell(row, ["Nome", "nome", "NOME"]) ?? "").trim();
-        const rawTel = String(getCell(row, ["Telefone", "telefone", "TELEFONE"]) ?? "").trim();
-        const rawMail = String(getCell(row, ["Email", "email", "EMAIL"]) ?? "").trim();
+      const parsedLeads: Array<{
+        nome: string;
+        telefone: string;
+        telefone_raw: string;
+        e164: string;
+        whatsapp_url: string;
+        validacao: string;
+        email?: string;
+      }> = [];
+      const skipped: Array<{ row: number; reason: string }> = [];
 
-        // Extrair primeiro telefone válido
-        const firstPhone = extractFirstValidPhone(rawTel);
-        if (!firstPhone) {
-          throw new Error(`Linha ${index + 2}: Telefone inválido. Você pode separar múltiplos telefones por vírgula, ponto e vírgula, barra ou pipe (|)`);
-        }
+      jsonData.forEach((row, index) => {
+        const line = index + 2;
+        try {
+          // Listas de sinônimos para headers flexíveis
+          const rawNome = String(getCell(row, [
+            "nome", "nome do lead", "nome do cliente", "lead", "contato", "cliente", "name"
+          ]) ?? "").trim();
+          
+          let rawTel = String(getCell(row, [
+            "whatsapp", "celular", "telefone", "telefone 1", "telefone principal", 
+            "telefone de trabalho", "tel", "fone", "phone", "mobile"
+          ]) ?? "").trim();
+          
+          const rawMail = String(getCell(row, [
+            "email", "e-mail", "mail"
+          ]) ?? "").trim();
 
-        // Normalizar telefone
-        const phoneResult = normalizarTelefone(firstPhone);
-        
-        if (phoneResult.validacao === "invalido") {
-          invalidPhones++;
-          throw new Error(`Linha ${index + 2}: ${phoneResult.motivo_validacao}`);
-        }
+          // Fallback: procurar telefone em qualquer célula se não encontrado por header
+          if (!rawTel) {
+            for (const v of Object.values(row)) {
+              const maybe = extractFirstValidPhone(String(v ?? ""));
+              if (maybe) { 
+                rawTel = maybe; 
+                break; 
+              }
+            }
+          }
 
-        // Detectar se havia múltiplos telefones
-        const parts = rawTel.split(/[;,/|]/).map(p => p.trim()).filter(Boolean);
-        if (parts.length > 1) {
-          multiplePhoneCount++;
+          // Extrair primeiro telefone válido
+          const firstPhone = extractFirstValidPhone(rawTel);
+          if (!firstPhone) {
+            skipped.push({ row: line, reason: "Telefone não encontrado ou inválido" });
+            return;
+          }
+
+          // Detectar se havia múltiplos telefones
+          const parts = rawTel.split(/[;,/|]/).map(p => p.trim()).filter(Boolean);
+          if (parts.length > 1) {
+            multiplePhoneCount++;
+          }
+
+          // Normalizar telefone (validação acontece aqui)
+          const phoneResult = normalizarTelefone(firstPhone);
+          
+          if (phoneResult.validacao === "invalido") {
+            skipped.push({ row: line, reason: phoneResult.motivo_validacao || "Telefone inválido" });
+            return;
+          }
+
+          // Validar nome
+          const nameValidation = nameSchema.safeParse({ nome: rawNome });
+          if (!nameValidation.success) {
+            skipped.push({ row: line, reason: nameValidation.error.errors[0].message });
+            return;
+          }
+
+          // Validar email (opcional)
+          const emailValidation = emailSchema.safeParse(rawMail);
+          const validEmail = emailValidation.success ? emailValidation.data : undefined;
+
+          // Debug log
+          console.log(`[Upload Debug] Linha ${line}:`, {
+            raw: firstPhone,
+            normalized: phoneResult,
+            willSave: {
+              telefone: phoneResult.display_local,
+              e164: phoneResult.e164,
+              whatsapp: phoneResult.whatsapp_url
+            }
+          });
+          
+          parsedLeads.push({
+            nome: nameValidation.data.nome,
+            telefone: phoneResult.display_local,      // ✅ Usar resultado direto
+            telefone_raw: firstPhone,
+            e164: phoneResult.e164,                   // ✅ Usar resultado direto
+            whatsapp_url: phoneResult.whatsapp_url,   // ✅ Usar resultado direto
+            validacao: phoneResult.validacao,
+            email: validEmail
+          });
+          
+        } catch (e) {
+          skipped.push({ 
+            row: line, 
+            reason: e instanceof Error ? e.message : "Erro desconhecido" 
+          });
         }
-        
-        const validation = leadSchema.safeParse({
-          nome: rawNome,
-          telefone: phoneResult.display_local,
-          email: rawMail
-        });
-        if (!validation.success) {
-          throw new Error(`Linha ${index + 2}: ${validation.error.errors[0].message}`);
-        }
-        
-        return {
-          nome: validation.data.nome,
-          telefone: validation.data.telefone,
-          telefone_raw: firstPhone,
-          e164: phoneResult.e164,
-          whatsapp_url: phoneResult.whatsapp_url,
-          validacao: phoneResult.validacao,
-          email: validation.data.email || undefined
-        };
       });
+
+      // Verificar se há leads válidos
+      if (parsedLeads.length === 0) {
+        const firstReason = skipped[0]?.reason || "Formato inválido";
+        toast({
+          title: "Nenhum lead válido encontrado",
+          description: `Ex.: Linha ${skipped[0]?.row} — ${firstReason}. Verifique os cabeçalhos e formato.`,
+          variant: "destructive"
+        });
+        setSelectedFile(null);
+        setImportedLeads([]);
+        return;
+      }
 
       // Remover duplicatas dentro da planilha usando E.164 (manter primeira ocorrência)
       const e164Set = new Set<string>();
@@ -183,17 +268,22 @@ export default function Upload() {
       }
       setImportedLeads(uniqueParsedLeads);
 
-      // Montar mensagem com informações de duplicatas e múltiplos telefones
-      const descriptionParts: string[] = [`${uniqueParsedLeads.length} leads únicos encontrados`];
+      // Montar mensagem com informações de duplicatas, múltiplos telefones e linhas ignoradas
+      const descriptionParts: string[] = [`${uniqueParsedLeads.length} leads únicos`];
       if (duplicatesInFile > 0) {
-        descriptionParts.push(`${duplicatesInFile} duplicata(s) removida(s) da planilha`);
+        descriptionParts.push(`${duplicatesInFile} duplicata(s) removida(s)`);
       }
       if (multiplePhoneCount > 0) {
-        descriptionParts.push(`${multiplePhoneCount} linha(s) com múltiplos telefones — importamos o primeiro número válido`);
+        descriptionParts.push(`${multiplePhoneCount} com múltiplos telefones (usamos o 1º)`);
       }
+      if (skipped.length > 0) {
+        const firstSkipped = skipped.slice(0, 5).map(s => s.row).join(', ');
+        descriptionParts.push(`${skipped.length} linha(s) ignorada(s) (${firstSkipped}${skipped.length > 5 ? '...' : ''})`);
+      }
+      
       toast({
-        title: "Arquivo carregado",
-        description: descriptionParts.join('. ')
+        title: "Arquivo carregado com sucesso",
+        description: descriptionParts.join(' • ')
       });
     } catch (error) {
       console.error("Erro ao processar arquivo:", error);

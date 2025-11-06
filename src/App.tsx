@@ -29,6 +29,7 @@ import ContatosErrados from "./pages/ContatosErrados";
 import OptoutContacts from "./pages/OptoutContacts";
 import NaoAtendidos from "./pages/NaoAtendidos";
 import BackfillTelefones from "./pages/BackfillTelefones";
+import FixPhoneNumbers from "./pages/FixPhoneNumbers";
 import AcceptInvite from "./pages/AcceptInvite";
 import NotFound from "./pages/NotFound";
 
@@ -162,6 +163,14 @@ const App = () => (
                         element={
                           <ProtectedRoute allowedRoles={["admin"]}>
                             <BackfillTelefones />
+                          </ProtectedRoute>
+                        }
+                      />
+                      <Route
+                        path="/fix-phone-numbers"
+                        element={
+                          <ProtectedRoute allowedRoles={["admin"]}>
+                            <FixPhoneNumbers />
                           </ProtectedRoute>
                         }
                       />

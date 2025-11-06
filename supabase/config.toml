@@ -8,3 +8,6 @@ verify_jwt = true
 
 [functions.move-to-nao-atendidos]
 verify_jwt = true
+
+[functions.fix-phone-normalization]
+verify_jwt = true
