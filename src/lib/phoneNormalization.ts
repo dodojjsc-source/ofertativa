@@ -30,7 +30,11 @@ function splitDDI_DDD_Core(d: string) {
   if (d.length > 0 && d.startsWith("55")) {
     ddi = "55";
     d = d.slice(2);
-  } else if (d.length > 2 && d.length <= 15 && !d.startsWith("55") && !d.startsWith("0")) {
+  } else if (d.length <= 11) {
+    // 8-11 dígitos: tratar como Brasil (não extrair DDI da frente)
+    ddi = "55";
+  } else if (d.length > 11 && !d.startsWith("0")) {
+    // 12+ dígitos: possível DDI explícito diferente de 55
     const maybeDDI = d.slice(0, 2);
     if (/^\d{1,3}$/.test(maybeDDI)) {
       ddi = maybeDDI;
