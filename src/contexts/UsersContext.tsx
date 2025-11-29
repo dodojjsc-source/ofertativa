@@ -192,23 +192,7 @@ export function UsersProvider({ children }: { children: ReactNode }) {
       }
     }
 
-    try {
-      const { data, error } = await supabase
-        .from("leads")
-        .select("id")
-        .eq("status", "pendente")
-        .or(`corretor_id.eq.${id},gestor_id.eq.${id}`)
-        .limit(1);
-
-      if (error) throw error;
-
-      if (data && data.length > 0) {
-        return { canDelete: false, reason: "Não é possível excluir usuário com lote em aberto" };
-      }
-    } catch (error) {
-      console.error("Erro ao verificar leads:", error);
-    }
-
+    // Leads pendentes serão desvinculados automaticamente (ON DELETE SET NULL)
     return { canDelete: true };
   };
 
