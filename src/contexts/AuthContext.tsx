@@ -90,14 +90,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     // Setup auth state listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
+      async (event, session) => {
         if (mounted) {
           setSession(session);
           if (session?.user) {
-            setUser(null); // Clear while loading
-            setTimeout(() => {
-              if (mounted) loadUserProfile(session.user.id);
-            }, 0);
+            // Carregar perfil sem limpar user atual para evitar flickering/redirecionamento
+            await loadUserProfile(session.user.id);
           } else {
             setUser(null);
           }
