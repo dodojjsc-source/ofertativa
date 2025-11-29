@@ -20,6 +20,7 @@ export default function Auth() {
   const navigate = useNavigate();
   const { user, loading: authLoading } = useAuth();
   const [isLogin, setIsLogin] = useState(true);
+  const [isResetPassword, setIsResetPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     email: "",
@@ -39,7 +40,21 @@ export default function Auth() {
     setLoading(true);
 
     try {
-      if (isLogin) {
+      if (isResetPassword) {
+        const { error } = await supabase.auth.resetPasswordForEmail(formData.email, {
+          redirectTo: `${window.location.origin}/auth`,
+        });
+
+        if (error) throw error;
+
+        toast({
+          title: "Email enviado",
+          description: "Verifique seu email para redefinir a senha.",
+        });
+        
+        setIsResetPassword(false);
+        setIsLogin(true);
+      } else if (isLogin) {
         const { error } = await supabase.auth.signInWithPassword({
           email: formData.email,
           password: formData.password,
@@ -111,16 +126,20 @@ export default function Auth() {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 via-background to-secondary/5 p-4">
       <Card className="w-full max-w-md">
         <CardHeader>
-          <CardTitle>{isLogin ? "Login" : "Criar Conta"}</CardTitle>
+          <CardTitle>
+            {isResetPassword ? "Redefinir Senha" : isLogin ? "Login" : "Criar Conta"}
+          </CardTitle>
           <CardDescription>
-            {isLogin
+            {isResetPassword
+              ? "Digite seu email para receber o link de redefinição"
+              : isLogin
               ? "Entre com suas credenciais"
               : "Preencha os dados para criar sua conta"}
           </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
-            {!isLogin && (
+            {!isLogin && !isResetPassword && (
               <div className="space-y-2">
                 <Label htmlFor="name">Nome</Label>
                 <Input
@@ -148,37 +167,68 @@ export default function Auth() {
                 required
               />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="password">Senha</Label>
-              <Input
-                id="password"
-                type="password"
-                placeholder={isLogin ? "••••••••" : "Mínimo 8 caracteres, maiúscula, minúscula, número e especial"}
-                value={formData.password}
-                onChange={(e) =>
-                  setFormData({ ...formData, password: e.target.value })
-                }
-                required
-              />
-              {!isLogin && (
-                <p className="text-xs text-muted-foreground">
-                  Senha forte: min. 8 caracteres, maiúscula, minúscula, número e caractere especial
-                </p>
-              )}
-            </div>
+            {!isResetPassword && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="password">Senha</Label>
+                  {isLogin && (
+                    <Button
+                      type="button"
+                      variant="link"
+                      className="h-auto p-0 text-xs"
+                      onClick={() => {
+                        setIsResetPassword(true);
+                        setIsLogin(false);
+                      }}
+                    >
+                      Esqueci minha senha
+                    </Button>
+                  )}
+                </div>
+                <Input
+                  id="password"
+                  type="password"
+                  placeholder={isLogin ? "••••••••" : "Mínimo 8 caracteres, maiúscula, minúscula, número e especial"}
+                  value={formData.password}
+                  onChange={(e) =>
+                    setFormData({ ...formData, password: e.target.value })
+                  }
+                  required
+                />
+                {!isLogin && (
+                  <p className="text-xs text-muted-foreground">
+                    Senha forte: min. 8 caracteres, maiúscula, minúscula, número e caractere especial
+                  </p>
+                )}
+              </div>
+            )}
             <Button type="submit" className="w-full" disabled={loading || authLoading}>
-              {loading ? "Processando..." : isLogin ? "Entrar" : "Criar Conta"}
+              {loading ? "Processando..." : isResetPassword ? "Enviar Email" : isLogin ? "Entrar" : "Criar Conta"}
             </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              className="w-full"
-              onClick={() => setIsLogin(!isLogin)}
-            >
-              {isLogin
-                ? "Não tem conta? Criar nova"
-                : "Já tem conta? Fazer login"}
-            </Button>
+            {isResetPassword ? (
+              <Button
+                type="button"
+                variant="ghost"
+                className="w-full"
+                onClick={() => {
+                  setIsResetPassword(false);
+                  setIsLogin(true);
+                }}
+              >
+                Voltar ao login
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                variant="ghost"
+                className="w-full"
+                onClick={() => setIsLogin(!isLogin)}
+              >
+                {isLogin
+                  ? "Não tem conta? Criar nova"
+                  : "Já tem conta? Fazer login"}
+              </Button>
+            )}
           </form>
         </CardContent>
       </Card>
