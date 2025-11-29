@@ -69,10 +69,14 @@ export function PhoneLink({
         <Button
           variant="ghost"
           size="icon"
-          className="h-6 w-6"
-          onClick={() => window.open(whatsappUrl, "_blank")}
+          className="h-8 w-8 hover:bg-green-50"
+          onClick={(e) => {
+            e.preventDefault();
+            window.open(whatsappUrl, "_blank");
+          }}
+          title="Abrir no WhatsApp Web"
         >
-          <MessageCircle className="h-4 w-4 text-green-600" />
+          <MessageCircle className="h-5 w-5 text-green-600 fill-green-100" />
         </Button>
       )}
     </div>
