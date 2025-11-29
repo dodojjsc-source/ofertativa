@@ -398,9 +398,12 @@ export default function Atendimento() {
                 <div>
                   <p className="text-sm text-muted-foreground">Telefone</p>
                   <PhoneLink 
-                    phone={currentLead.telefone} 
+                    phone={currentLead.telefone}
+                    e164={currentLead.e164}
+                    whatsappUrl={currentLead.whatsapp_url}
                     className="text-lg font-semibold"
                     showIcon={false}
+                    showWhatsApp={true}
                   />
                 </div>
               </div>
