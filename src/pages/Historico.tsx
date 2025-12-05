@@ -1,6 +1,7 @@
+import { useState } from "react";
 import { Layout } from "@/components/Layout";
 import { useAuth } from "@/contexts/AuthContext";
-import { useLeads } from "@/contexts/LeadsContext";
+import { useLeads, Lead } from "@/contexts/LeadsContext";
 import { useFilters } from "@/contexts/FiltersContext";
 import { useUsers } from "@/contexts/UsersContext";
 import { FiltersCard } from "@/components/FiltersCard";
@@ -8,15 +9,19 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Trash2, Eye } from "lucide-react";
+import { Trash2, Eye, Pencil } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { PhoneLink } from "@/components/ui/phone-link";
+import { EditarFeedbackDialog } from "@/components/EditarFeedbackDialog";
 
 export default function Historico() {
   const { user } = useAuth();
   const { leads, getLeadsByCorretor, getLeadsByGestor, deleteLead } = useLeads();
   const { filters } = useFilters();
   const { users } = useUsers();
+  
+  const [editingLead, setEditingLead] = useState<Lead | null>(null);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
 
   const getFilteredLeads = () => {
     let filtered = leads.filter((l) => 
@@ -85,6 +90,18 @@ export default function Historico() {
         variant: "destructive",
       });
     }
+  };
+
+  const canEditLead = (lead: Lead) => {
+    if (user?.role === "admin") return true;
+    if (user?.role === "gestor" && lead.gestorId === user.id) return true;
+    if (user?.role === "corretor" && lead.corretorId === user.id) return true;
+    return false;
+  };
+
+  const handleEdit = (lead: Lead) => {
+    setEditingLead(lead);
+    setIsEditDialogOpen(true);
   };
 
   const getFeedbackBadge = (feedback?: string) => {
@@ -179,7 +196,17 @@ export default function Historico() {
                           ? new Date(lead.dataAtendimento).toLocaleDateString("pt-BR")
                           : "-"}
                       </TableCell>
-                      <TableCell className="text-right space-x-2">
+                      <TableCell className="text-right space-x-1">
+                        {canEditLead(lead) && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleEdit(lead)}
+                            title="Editar feedback"
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                        )}
                         <Button
                           variant="ghost"
                           size="icon"
@@ -189,6 +216,7 @@ export default function Historico() {
                               description: lead.observacao || "Sem observação",
                             });
                           }}
+                          title="Ver observação"
                         >
                           <Eye className="h-4 w-4" />
                         </Button>
@@ -197,6 +225,7 @@ export default function Historico() {
                             variant="ghost"
                             size="icon"
                             onClick={() => handleDelete(lead.id)}
+                            title="Excluir lead"
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>
@@ -210,6 +239,12 @@ export default function Historico() {
           </CardContent>
         </Card>
       </div>
+
+      <EditarFeedbackDialog
+        lead={editingLead}
+        open={isEditDialogOpen}
+        onOpenChange={setIsEditDialogOpen}
+      />
     </Layout>
   );
 }
