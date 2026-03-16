@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useFilters } from "@/contexts/FiltersContext";
 import { useUsers } from "@/contexts/UsersContext";
 import { useLeads } from "@/contexts/LeadsContext";
+import { useCampanhas } from "@/contexts/CampanhasContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
@@ -17,6 +18,7 @@ export function ProductionFilters() {
   const { users } = useUsers();
   const { user } = useAuth();
   const { leads } = useLeads();
+  const { campanhas: allCampanhas } = useCampanhas();
   const [presetName, setPresetName] = useState("");
 
   // Filtrar opções baseado na role do usuário
@@ -30,7 +32,9 @@ export function ProductionFilters() {
     ? users.filter(u => u.role === "corretor" && u.status === "ativo" && u.gestorId === user.id)
     : [];
   
-  const campanhas = Array.from(new Set(leads.map(l => l.campanha)));
+  const campanhas = user?.role === "gestor"
+    ? allCampanhas.filter(c => c.gestorId === user.id)
+    : allCampanhas;
 
   const handleSavePreset = () => {
     if (!presetName.trim()) {
@@ -117,7 +121,7 @@ export function ProductionFilters() {
               <SelectContent>
                 <SelectItem value="all">Todas</SelectItem>
                 {campanhas.map(c => (
-                  <SelectItem key={c} value={c}>{c}</SelectItem>
+                  <SelectItem key={c.id} value={c.nome}>{c.nome}</SelectItem>
                 ))}
               </SelectContent>
             </Select>

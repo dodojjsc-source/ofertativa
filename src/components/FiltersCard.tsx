@@ -16,9 +16,15 @@ export function FiltersCard() {
   const { user } = useAuth();
 
   const gestores = users.filter((u) => u.role === "gestor" && u.status === "ativo");
-  const corretores = filters.gestorId
-    ? users.filter((u) => u.role === "corretor" && u.gestorId === filters.gestorId && u.status === "ativo")
-    : users.filter((u) => u.role === "corretor" && u.status === "ativo");
+  const corretores = user?.role === "gestor"
+    ? users.filter((u) => u.role === "corretor" && u.gestorId === user.id && u.status === "ativo")
+    : filters.gestorId
+      ? users.filter((u) => u.role === "corretor" && u.gestorId === filters.gestorId && u.status === "ativo")
+      : users.filter((u) => u.role === "corretor" && u.status === "ativo");
+
+  const filteredCampanhas = user?.role === "gestor"
+    ? campanhas.filter((c) => c.gestorId === user.id)
+    : campanhas;
 
   const feedbacks = ["interessado", "agendado", "recusou", "optout"];
 
@@ -91,7 +97,7 @@ export function FiltersCard() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Todas</SelectItem>
-              {campanhas.map((c) => (
+              {filteredCampanhas.map((c) => (
                 <SelectItem key={c.id} value={c.nome}>
                   {c.nome}
                 </SelectItem>
