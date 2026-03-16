@@ -18,6 +18,7 @@ export function ProductionFilters() {
   const { users } = useUsers();
   const { user } = useAuth();
   const { leads } = useLeads();
+  const { campanhas: allCampanhas } = useCampanhas();
   const [presetName, setPresetName] = useState("");
 
   // Filtrar opções baseado na role do usuário
@@ -31,7 +32,9 @@ export function ProductionFilters() {
     ? users.filter(u => u.role === "corretor" && u.status === "ativo" && u.gestorId === user.id)
     : [];
   
-  const campanhas = Array.from(new Set(leads.map(l => l.campanha)));
+  const campanhas = user?.role === "gestor"
+    ? allCampanhas.filter(c => c.gestorId === user.id)
+    : allCampanhas;
 
   const handleSavePreset = () => {
     if (!presetName.trim()) {

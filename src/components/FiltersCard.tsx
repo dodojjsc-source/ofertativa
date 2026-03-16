@@ -97,7 +97,7 @@ export function FiltersCard() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Todas</SelectItem>
-              {campanhas.map((c) => (
+              {filteredCampanhas.map((c) => (
                 <SelectItem key={c.id} value={c.nome}>
                   {c.nome}
                 </SelectItem>
