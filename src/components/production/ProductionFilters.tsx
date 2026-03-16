@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useFilters } from "@/contexts/FiltersContext";
 import { useUsers } from "@/contexts/UsersContext";
 import { useLeads } from "@/contexts/LeadsContext";
+import { useCampanhas } from "@/contexts/CampanhasContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
