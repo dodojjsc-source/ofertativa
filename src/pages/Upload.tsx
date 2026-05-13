@@ -56,8 +56,10 @@ const extractFirstValidPhone = (raw: string): string | null => {
   return null;
 };
 // Schema apenas para validar nome (telefone é validado por normalizarTelefone)
+// Aceita letras, números, espaços e pontuação comum em nomes/contatos importados
+// (hífens, dois-pontos, parênteses, colchetes, pontos, barras, etc.)
 const nameSchema = z.object({
-  nome: z.string().trim().min(2, "Nome deve ter pelo menos 2 caracteres").max(100, "Nome muito longo").regex(/^[a-zA-ZÀ-ÿ\s]+$/, "Nome deve conter apenas letras")
+  nome: z.string().trim().min(2, "Nome deve ter pelo menos 2 caracteres").max(200, "Nome muito longo")
 });
 
 const emailSchema = z.string().trim().email("Email inválido").max(255, "Email muito longo").optional().or(z.literal(""));
