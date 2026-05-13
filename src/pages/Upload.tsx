@@ -495,9 +495,14 @@ export default function Upload() {
         const corretor = corretoresElegiveis.find(c => c.id === corretorId);
         return `${corretor?.name}: ${corretoresCount[corretorId] || 0} leads`;
       });
+      const distribuidos = newAssignments.length;
+      const naoDistribuidos = pool.length - distribuidos;
       toast({
-        title: "Distribuição realizada",
-        description: resumo.join(" | ")
+        title: naoDistribuidos > 0 ? `Distribuídos ${distribuidos} de ${pool.length} (${naoDistribuidos} sobraram)` : "Distribuição realizada",
+        description: naoDistribuidos > 0
+          ? `Aumente o "Tamanho do Lote" para ${Math.ceil(pool.length / selectedCorretores.length)} para distribuir todos. ${resumo.join(" | ")}`
+          : resumo.join(" | "),
+        variant: naoDistribuidos > 0 ? "destructive" : "default"
       });
       setCampanha("");
       setSelectedCorretores([]);
