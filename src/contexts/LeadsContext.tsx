@@ -247,26 +247,47 @@ export function LeadsProvider({ children }: { children: ReactNode }) {
           data_atendimento: lead.dataAtendimento,
         }));
 
-        const { error } = await supabase.from("leads").insert(dbLeads);
+        // Inserir em lotes de 200 para evitar timeouts/limites do PostgREST
+        const BATCH_SIZE = 200;
+        let insertedCount = 0;
+        const batchErrors: string[] = [];
+        for (let i = 0; i < dbLeads.length; i += BATCH_SIZE) {
+          const batch = dbLeads.slice(i, i + BATCH_SIZE);
+          const batchNum = Math.floor(i / BATCH_SIZE) + 1;
+          console.log(`[addLeads] Inserindo lote ${batchNum} (${batch.length} leads)...`);
+          const { error: batchError } = await supabase.from("leads").insert(batch);
+          if (batchError) {
+            console.error(`[addLeads] Lote ${batchNum} falhou:`, batchError);
+            batchErrors.push(`Lote ${batchNum}: ${batchError.message}`);
+          } else {
+            insertedCount += batch.length;
+            console.log(`[addLeads] Lote ${batchNum} OK. Total inserido: ${insertedCount}/${dbLeads.length}`);
+          }
+        }
 
-        if (error) throw error;
-
-        // Não recarregar aqui - deixar o realtime fazer com debounce
+        if (insertedCount === 0 && batchErrors.length > 0) {
+          throw new Error(batchErrors[0]);
+        }
 
         const duplicatesCount = newLeads.length - uniqueLeads.length;
-        const descriptionParts: string[] = [`${uniqueLeads.length} lead(s) adicionado(s)`];
-        
+        const descriptionParts: string[] = [`${insertedCount} de ${dbLeads.length} lead(s) inseridos`];
+
         if (internalDuplicates > 0) {
           descriptionParts.push(`${internalDuplicates} duplicatas internas removidas`);
         }
-        
+
         if (duplicatesCount - internalDuplicates > 0) {
           descriptionParts.push(`${duplicatesCount - internalDuplicates} já existiam no banco`);
         }
-        
+
+        if (batchErrors.length > 0) {
+          descriptionParts.push(`${batchErrors.length} lote(s) falharam — veja o console`);
+        }
+
         toast({
-          title: "Leads adicionados",
+          title: insertedCount < dbLeads.length ? "Inserção parcial" : "Leads adicionados",
           description: descriptionParts.join(', '),
+          variant: insertedCount < dbLeads.length ? "destructive" : "default",
         });
       } else {
         // Sem campanha, inserir todos (usar internallyUniqueLeads)
@@ -294,20 +315,39 @@ export function LeadsProvider({ children }: { children: ReactNode }) {
           data_atendimento: lead.dataAtendimento,
         }));
 
-        const { error } = await supabase.from("leads").insert(dbLeads);
+        // Inserir em lotes de 200
+        const BATCH_SIZE = 200;
+        let insertedCount = 0;
+        const batchErrors: string[] = [];
+        for (let i = 0; i < dbLeads.length; i += BATCH_SIZE) {
+          const batch = dbLeads.slice(i, i + BATCH_SIZE);
+          const batchNum = Math.floor(i / BATCH_SIZE) + 1;
+          console.log(`[addLeads/no-campaign] Inserindo lote ${batchNum} (${batch.length} leads)...`);
+          const { error: batchError } = await supabase.from("leads").insert(batch);
+          if (batchError) {
+            console.error(`[addLeads/no-campaign] Lote ${batchNum} falhou:`, batchError);
+            batchErrors.push(`Lote ${batchNum}: ${batchError.message}`);
+          } else {
+            insertedCount += batch.length;
+          }
+        }
 
-        if (error) throw error;
+        if (insertedCount === 0 && batchErrors.length > 0) {
+          throw new Error(batchErrors[0]);
+        }
 
-        // Não recarregar aqui - deixar o realtime fazer com debounce
-        
-        const descriptionParts: string[] = [`${internallyUniqueLeads.length} lead(s) adicionado(s) com sucesso`];
+        const descriptionParts: string[] = [`${insertedCount} de ${dbLeads.length} lead(s) inseridos`];
         if (internalDuplicates > 0) {
           descriptionParts.push(`${internalDuplicates} duplicatas internas removidas`);
         }
-        
+        if (batchErrors.length > 0) {
+          descriptionParts.push(`${batchErrors.length} lote(s) falharam`);
+        }
+
         toast({
-          title: "Sucesso",
+          title: insertedCount < dbLeads.length ? "Inserção parcial" : "Sucesso",
           description: descriptionParts.join(', '),
+          variant: insertedCount < dbLeads.length ? "destructive" : "default",
         });
       }
     } catch (error: any) {
