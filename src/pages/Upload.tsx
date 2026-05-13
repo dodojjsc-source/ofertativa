@@ -495,9 +495,14 @@ export default function Upload() {
         const corretor = corretoresElegiveis.find(c => c.id === corretorId);
         return `${corretor?.name}: ${corretoresCount[corretorId] || 0} leads`;
       });
+      const distribuidos = newAssignments.length;
+      const naoDistribuidos = pool.length - distribuidos;
       toast({
-        title: "Distribuição realizada",
-        description: resumo.join(" | ")
+        title: naoDistribuidos > 0 ? `Distribuídos ${distribuidos} de ${pool.length} (${naoDistribuidos} sobraram)` : "Distribuição realizada",
+        description: naoDistribuidos > 0
+          ? `Aumente o "Tamanho do Lote" para ${Math.ceil(pool.length / selectedCorretores.length)} para distribuir todos. ${resumo.join(" | ")}`
+          : resumo.join(" | "),
+        variant: naoDistribuidos > 0 ? "destructive" : "default"
       });
       setCampanha("");
       setSelectedCorretores([]);
@@ -563,10 +568,26 @@ export default function Upload() {
 
               <div className="space-y-2">
                 <Label htmlFor="lote">Tamanho do Lote por Corretor</Label>
-                <Input id="lote" type="number" min="1" max="100" value={loteSize} onChange={e => setLoteSize(Number(e.target.value))} />
+                <Input id="lote" type="number" min="1" max="10000" value={loteSize} onChange={e => setLoteSize(Number(e.target.value))} />
                 <p className="text-xs text-muted-foreground">
-                  Quantidade de leads que cada corretor selecionado receberá
+                  Quantidade máxima de leads que cada corretor selecionado receberá
                 </p>
+                {importedLeads.length > 0 && selectedCorretores.length > 0 && (() => {
+                  const capacidade = loteSize * selectedCorretores.length;
+                  const sobra = importedLeads.length - capacidade;
+                  if (sobra > 0) {
+                    return (
+                      <p className="text-xs text-destructive font-medium">
+                        ⚠ {importedLeads.length} leads × {selectedCorretores.length} corretores × lote {loteSize} = capacidade {capacidade}. {sobra} leads NÃO serão distribuídos. Aumente o lote para pelo menos {Math.ceil(importedLeads.length / selectedCorretores.length)}.
+                      </p>
+                    );
+                  }
+                  return (
+                    <p className="text-xs text-emerald-600 font-medium">
+                      ✓ Capacidade {capacidade} cobre os {importedLeads.length} leads.
+                    </p>
+                  );
+                })()}
               </div>
 
               <div className="space-y-3">
