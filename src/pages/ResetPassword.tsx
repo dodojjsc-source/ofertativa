@@ -26,6 +26,10 @@ const waitForSession = async (attempts = 20) => {
   return false;
 };
 
+const getErrorMessage = (error: unknown, fallback: string) => {
+  return error instanceof Error ? error.message : fallback;
+};
+
 const establishRecoverySession = () => {
   if (recoverySessionPromise) return recoverySessionPromise;
 
@@ -93,14 +97,14 @@ export default function ResetPassword() {
             "Link de recuperação inválido ou expirado. Solicite um novo email."
           );
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         const recoveredAfterRace = await waitForSession(6);
         if (!active) return;
 
         if (recoveredAfterRace) {
           setSessionReady(true);
         } else {
-          setSessionError(err.message || "Erro ao validar link de recuperação.");
+          setSessionError(getErrorMessage(err, "Erro ao validar link de recuperação."));
         }
       }
     };
@@ -146,10 +150,10 @@ export default function ResetPassword() {
 
       await supabase.auth.signOut();
       navigate("/auth", { replace: true });
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: "Erro ao alterar senha",
-        description: error.message,
+        description: getErrorMessage(error, "Não foi possível alterar a senha."),
         variant: "destructive",
       });
     } finally {
