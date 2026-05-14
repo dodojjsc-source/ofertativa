@@ -34,8 +34,27 @@ const establishRecoverySession = () => {
   if (recoverySessionPromise) return recoverySessionPromise;
 
   recoverySessionPromise = (async () => {
-    const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
-    const searchParams = new URLSearchParams(window.location.search);
+    const savedRecoveryUrl = sessionStorage.getItem("ofertativa-password-recovery-url") || "";
+    const savedSearch = savedRecoveryUrl.startsWith("?")
+      ? savedRecoveryUrl.split("#")[0]
+      : "";
+    const savedHash = savedRecoveryUrl.includes("#")
+      ? savedRecoveryUrl.substring(savedRecoveryUrl.indexOf("#"))
+      : "";
+    const currentSearch = window.location.search || savedSearch;
+    const currentHash = window.location.hash || savedHash;
+
+    console.info("[ResetPassword] recovery init", {
+      hasHash: Boolean(currentHash),
+      hasSearch: Boolean(currentSearch),
+      hasSavedRecoveryUrl: Boolean(savedRecoveryUrl),
+      hasCode: currentSearch.includes("code="),
+      hasTokenHash: `${currentSearch}${currentHash}`.includes("token_hash="),
+      hasAccessToken: currentHash.includes("access_token="),
+    });
+
+    const hashParams = new URLSearchParams(currentHash.replace(/^#/, ""));
+    const searchParams = new URLSearchParams(currentSearch);
     const urlError = hashParams.get("error_description") || searchParams.get("error_description");
 
     if (urlError) {
@@ -55,10 +74,12 @@ const establishRecoverySession = () => {
       });
       if (error) throw error;
       window.history.replaceState(null, "", window.location.pathname);
+      sessionStorage.removeItem("ofertativa-password-recovery-url");
     } else if (code) {
       const { error } = await supabase.auth.exchangeCodeForSession(code);
       if (error) throw error;
       window.history.replaceState(null, "", window.location.pathname);
+      sessionStorage.removeItem("ofertativa-password-recovery-url");
     } else if (tokenHash) {
       const { error } = await supabase.auth.verifyOtp({
         token_hash: tokenHash,
@@ -66,6 +87,7 @@ const establishRecoverySession = () => {
       });
       if (error) throw error;
       window.history.replaceState(null, "", window.location.pathname);
+      sessionStorage.removeItem("ofertativa-password-recovery-url");
     }
 
     return waitForSession();
@@ -84,6 +106,18 @@ export default function ResetPassword() {
 
   useEffect(() => {
     let active = true;
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      console.info("[ResetPassword] auth event", event, { hasSession: Boolean(session) });
+      if (!active) return;
+
+      if (event === "PASSWORD_RECOVERY" || session?.user) {
+        setSessionError(null);
+        setSessionReady(true);
+      }
+    });
 
     const init = async () => {
       try {
@@ -112,6 +146,7 @@ export default function ResetPassword() {
 
     return () => {
       active = false;
+      subscription.unsubscribe();
     };
   }, []);
 
