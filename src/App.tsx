@@ -31,6 +31,7 @@ import NaoAtendidos from "./pages/NaoAtendidos";
 import BackfillTelefones from "./pages/BackfillTelefones";
 import FixPhoneNumbers from "./pages/FixPhoneNumbers";
 import AcceptInvite from "./pages/AcceptInvite";
+import ResetPassword from "./pages/ResetPassword";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -54,6 +55,7 @@ const App = () => (
                       <Route path="/auth" element={<Auth />} />
                       <Route path="/login" element={<Login />} />
                       <Route path="/accept-invite" element={<AcceptInvite />} />
+                      <Route path="/reset-password" element={<ResetPassword />} />
                       <Route
                         path="/dashboard"
                         element={
