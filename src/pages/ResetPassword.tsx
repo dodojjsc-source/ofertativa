@@ -34,16 +34,27 @@ const establishRecoverySession = () => {
   if (recoverySessionPromise) return recoverySessionPromise;
 
   recoverySessionPromise = (async () => {
+    const savedRecoveryUrl = sessionStorage.getItem("ofertativa-password-recovery-url") || "";
+    const savedSearch = savedRecoveryUrl.startsWith("?")
+      ? savedRecoveryUrl.split("#")[0]
+      : "";
+    const savedHash = savedRecoveryUrl.includes("#")
+      ? savedRecoveryUrl.substring(savedRecoveryUrl.indexOf("#"))
+      : "";
+    const currentSearch = window.location.search || savedSearch;
+    const currentHash = window.location.hash || savedHash;
+
     console.info("[ResetPassword] recovery init", {
-      hasHash: Boolean(window.location.hash),
-      hasSearch: Boolean(window.location.search),
-      hasCode: window.location.search.includes("code="),
-      hasTokenHash: window.location.href.includes("token_hash="),
-      hasAccessToken: window.location.hash.includes("access_token="),
+      hasHash: Boolean(currentHash),
+      hasSearch: Boolean(currentSearch),
+      hasSavedRecoveryUrl: Boolean(savedRecoveryUrl),
+      hasCode: currentSearch.includes("code="),
+      hasTokenHash: `${currentSearch}${currentHash}`.includes("token_hash="),
+      hasAccessToken: currentHash.includes("access_token="),
     });
 
-    const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
-    const searchParams = new URLSearchParams(window.location.search);
+    const hashParams = new URLSearchParams(currentHash.replace(/^#/, ""));
+    const searchParams = new URLSearchParams(currentSearch);
     const urlError = hashParams.get("error_description") || searchParams.get("error_description");
 
     if (urlError) {
@@ -63,10 +74,12 @@ const establishRecoverySession = () => {
       });
       if (error) throw error;
       window.history.replaceState(null, "", window.location.pathname);
+      sessionStorage.removeItem("ofertativa-password-recovery-url");
     } else if (code) {
       const { error } = await supabase.auth.exchangeCodeForSession(code);
       if (error) throw error;
       window.history.replaceState(null, "", window.location.pathname);
+      sessionStorage.removeItem("ofertativa-password-recovery-url");
     } else if (tokenHash) {
       const { error } = await supabase.auth.verifyOtp({
         token_hash: tokenHash,
@@ -74,6 +87,7 @@ const establishRecoverySession = () => {
       });
       if (error) throw error;
       window.history.replaceState(null, "", window.location.pathname);
+      sessionStorage.removeItem("ofertativa-password-recovery-url");
     }
 
     return waitForSession();
