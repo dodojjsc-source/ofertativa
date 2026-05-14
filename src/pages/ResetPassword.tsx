@@ -164,6 +164,7 @@ export default function ResetPassword() {
               {loading ? "Salvando..." : "Salvar nova senha"}
             </Button>
           </form>
+          )}
         </CardContent>
       </Card>
     </div>
