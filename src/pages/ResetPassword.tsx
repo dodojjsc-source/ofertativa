@@ -34,6 +34,14 @@ const establishRecoverySession = () => {
   if (recoverySessionPromise) return recoverySessionPromise;
 
   recoverySessionPromise = (async () => {
+    console.info("[ResetPassword] recovery init", {
+      hasHash: Boolean(window.location.hash),
+      hasSearch: Boolean(window.location.search),
+      hasCode: window.location.search.includes("code="),
+      hasTokenHash: window.location.href.includes("token_hash="),
+      hasAccessToken: window.location.hash.includes("access_token="),
+    });
+
     const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
     const searchParams = new URLSearchParams(window.location.search);
     const urlError = hashParams.get("error_description") || searchParams.get("error_description");
