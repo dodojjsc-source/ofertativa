@@ -93,6 +93,18 @@ export default function ResetPassword() {
   useEffect(() => {
     let active = true;
 
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      console.info("[ResetPassword] auth event", event, { hasSession: Boolean(session) });
+      if (!active) return;
+
+      if (event === "PASSWORD_RECOVERY" || session?.user) {
+        setSessionError(null);
+        setSessionReady(true);
+      }
+    });
+
     const init = async () => {
       try {
         const hasRecoverySession = await establishRecoverySession();
@@ -120,6 +132,7 @@ export default function ResetPassword() {
 
     return () => {
       active = false;
+      subscription.unsubscribe();
     };
   }, []);
 
