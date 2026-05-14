@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -20,6 +20,50 @@ export default function ResetPassword() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [sessionReady, setSessionReady] = useState(false);
+  const [sessionError, setSessionError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const init = async () => {
+      // Supabase pode mandar token via hash (#access_token=...&type=recovery)
+      // ou via query (?code=...) dependendo do fluxo configurado
+      const hash = window.location.hash;
+      const search = window.location.search;
+
+      try {
+        if (hash && hash.includes("access_token")) {
+          const params = new URLSearchParams(hash.substring(1));
+          const access_token = params.get("access_token");
+          const refresh_token = params.get("refresh_token");
+          if (access_token && refresh_token) {
+            const { error } = await supabase.auth.setSession({ access_token, refresh_token });
+            if (error) throw error;
+            window.history.replaceState(null, "", window.location.pathname);
+          }
+        } else if (search.includes("code=")) {
+          const params = new URLSearchParams(search);
+          const code = params.get("code");
+          if (code) {
+            const { error } = await supabase.auth.exchangeCodeForSession(code);
+            if (error) throw error;
+            window.history.replaceState(null, "", window.location.pathname);
+          }
+        }
+
+        const { data } = await supabase.auth.getSession();
+        if (data.session) {
+          setSessionReady(true);
+        } else {
+          setSessionError(
+            "Link de recuperação inválido ou expirado. Solicite um novo email."
+          );
+        }
+      } catch (err: any) {
+        setSessionError(err.message || "Erro ao validar link de recuperação.");
+      }
+    };
+    init();
+  }, []);
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -72,9 +116,27 @@ export default function ResetPassword() {
       <Card className="w-full max-w-md">
         <CardHeader>
           <CardTitle>Nova senha</CardTitle>
-          <CardDescription>Defina sua nova senha de acesso.</CardDescription>
+          <CardDescription>
+            {sessionError
+              ? "Não foi possível validar o link."
+              : sessionReady
+              ? "Defina sua nova senha de acesso."
+              : "Validando link de recuperação..."}
+          </CardDescription>
         </CardHeader>
         <CardContent>
+          {sessionError && (
+            <div className="space-y-4">
+              <p className="text-sm text-destructive">{sessionError}</p>
+              <Button className="w-full" onClick={() => navigate("/auth")}>
+                Voltar ao login
+              </Button>
+            </div>
+          )}
+          {!sessionError && !sessionReady && (
+            <p className="text-sm text-muted-foreground">Aguarde...</p>
+          )}
+          {sessionReady && (
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="password">Nova senha</Label>
