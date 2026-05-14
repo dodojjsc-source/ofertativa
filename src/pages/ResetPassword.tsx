@@ -15,6 +15,61 @@ const passwordSchema = z.string()
   .regex(/[0-9]/, "A senha deve conter pelo menos um número")
   .regex(/[^A-Za-z0-9]/, "A senha deve conter pelo menos um caractere especial");
 
+let recoverySessionPromise: Promise<boolean> | null = null;
+
+const waitForSession = async (attempts = 20) => {
+  for (let index = 0; index < attempts; index += 1) {
+    const { data } = await supabase.auth.getSession();
+    if (data.session) return true;
+    await new Promise((resolve) => setTimeout(resolve, 150));
+  }
+  return false;
+};
+
+const establishRecoverySession = () => {
+  if (recoverySessionPromise) return recoverySessionPromise;
+
+  recoverySessionPromise = (async () => {
+    const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+    const searchParams = new URLSearchParams(window.location.search);
+    const urlError = hashParams.get("error_description") || searchParams.get("error_description");
+
+    if (urlError) {
+      throw new Error(urlError.replace(/\+/g, " "));
+    }
+
+    const accessToken = hashParams.get("access_token");
+    const refreshToken = hashParams.get("refresh_token");
+    const code = searchParams.get("code");
+    const tokenHash = searchParams.get("token_hash") || hashParams.get("token_hash");
+    const type = searchParams.get("type") || hashParams.get("type") || "recovery";
+
+    if (accessToken && refreshToken) {
+      const { error } = await supabase.auth.setSession({
+        access_token: accessToken,
+        refresh_token: refreshToken,
+      });
+      if (error) throw error;
+      window.history.replaceState(null, "", window.location.pathname);
+    } else if (code) {
+      const { error } = await supabase.auth.exchangeCodeForSession(code);
+      if (error) throw error;
+      window.history.replaceState(null, "", window.location.pathname);
+    } else if (tokenHash) {
+      const { error } = await supabase.auth.verifyOtp({
+        token_hash: tokenHash,
+        type: type as "recovery",
+      });
+      if (error) throw error;
+      window.history.replaceState(null, "", window.location.pathname);
+    }
+
+    return waitForSession();
+  })();
+
+  return recoverySessionPromise;
+};
+
 export default function ResetPassword() {
   const navigate = useNavigate();
   const [password, setPassword] = useState("");
@@ -24,34 +79,14 @@ export default function ResetPassword() {
   const [sessionError, setSessionError] = useState<string | null>(null);
 
   useEffect(() => {
+    let active = true;
+
     const init = async () => {
-      // Supabase pode mandar token via hash (#access_token=...&type=recovery)
-      // ou via query (?code=...) dependendo do fluxo configurado
-      const hash = window.location.hash;
-      const search = window.location.search;
-
       try {
-        if (hash && hash.includes("access_token")) {
-          const params = new URLSearchParams(hash.substring(1));
-          const access_token = params.get("access_token");
-          const refresh_token = params.get("refresh_token");
-          if (access_token && refresh_token) {
-            const { error } = await supabase.auth.setSession({ access_token, refresh_token });
-            if (error) throw error;
-            window.history.replaceState(null, "", window.location.pathname);
-          }
-        } else if (search.includes("code=")) {
-          const params = new URLSearchParams(search);
-          const code = params.get("code");
-          if (code) {
-            const { error } = await supabase.auth.exchangeCodeForSession(code);
-            if (error) throw error;
-            window.history.replaceState(null, "", window.location.pathname);
-          }
-        }
+        const hasRecoverySession = await establishRecoverySession();
+        if (!active) return;
 
-        const { data } = await supabase.auth.getSession();
-        if (data.session) {
+        if (hasRecoverySession) {
           setSessionReady(true);
         } else {
           setSessionError(
@@ -59,10 +94,21 @@ export default function ResetPassword() {
           );
         }
       } catch (err: any) {
-        setSessionError(err.message || "Erro ao validar link de recuperação.");
+        const recoveredAfterRace = await waitForSession(6);
+        if (!active) return;
+
+        if (recoveredAfterRace) {
+          setSessionReady(true);
+        } else {
+          setSessionError(err.message || "Erro ao validar link de recuperação.");
+        }
       }
     };
     init();
+
+    return () => {
+      active = false;
+    };
   }, []);
 
   const handleSubmit = async (event: React.FormEvent) => {
