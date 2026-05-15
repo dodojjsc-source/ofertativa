@@ -11,3 +11,6 @@ verify_jwt = true
 
 [functions.fix-phone-normalization]
 verify_jwt = true
+
+[functions.admin-users]
+verify_jwt = false
