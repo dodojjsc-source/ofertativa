@@ -427,7 +427,7 @@ export default function Atendimento() {
 
             <div className="flex flex-col gap-4">
               <div className="flex gap-4">
-                <Button onClick={handleAtendeu} className="flex-1" size="lg">
+                <Button onClick={handleAtendeu} className="flex-1 bg-green-600 hover:bg-green-700 text-white" size="lg">
                   <Phone className="mr-2 h-5 w-5" />
                   Atendeu
                 </Button>
