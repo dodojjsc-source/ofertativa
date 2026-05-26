@@ -1,9 +1,10 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useUsers } from "@/contexts/UsersContext";
@@ -25,6 +26,22 @@ interface ImportarBitrixDialogProps {
 const norm = (s: string) =>
   (s || "").toString().toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/\s+/g, " ").trim();
 
+// Chave "primeiro nome + último sobrenome" pra pegar variações tipo "Pedro Souza" vs "Pedro Henrique Tomaz de Souza"
+const firstLastKey = (s: string) => {
+  const parts = norm(s).split(" ").filter(p => p && p.length >= 2);
+  if (parts.length === 0) return "";
+  if (parts.length === 1) return parts[0];
+  return `${parts[0]}|${parts[parts.length - 1]}`;
+};
+
+const localPart = (email: string) => (email || "").toLowerCase().split("@")[0].trim();
+
+interface MatchInfo {
+  buzz: BuzzUser;
+  matchedUser: { id: string; name: string; email: string } | null;
+  matchReason: string | null;
+}
+
 export function ImportarBitrixDialog({ open, onOpenChange }: ImportarBitrixDialogProps) {
   const { users, getGestores } = useUsers();
   const gestores = getGestores();
@@ -34,27 +51,74 @@ export function ImportarBitrixDialog({ open, onOpenChange }: ImportarBitrixDialo
   const [senhaPadrao, setSenhaPadrao] = useState("Buzz@2026");
   const [processing, setProcessing] = useState(false);
   const [search, setSearch] = useState("");
+  const [mostrarTodos, setMostrarTodos] = useState(false);
 
-  // Quem está no Bitrix e NÃO está no Ofertativa
-  const faltantes = useMemo<BuzzUser[]>(() => {
-    const emailsExistentes = new Set(users.map(u => (u.email || "").toLowerCase().trim()));
-    const nomesExistentes = new Set(users.map(u => norm(u.name)));
-    return (buzzAtivos as BuzzUser[]).filter(b => {
-      const email = (b.email || "").toLowerCase().trim();
-      const nome = norm(b.nome);
-      if (emailsExistentes.has(email)) return false;
-      if (nome && nomesExistentes.has(nome)) return false;
-      return true;
+  // Quando abre, limpa estado
+  useEffect(() => {
+    if (open) {
+      setSelectedEmails(new Set());
+      setSearch("");
+      setMostrarTodos(false);
+    }
+  }, [open]);
+
+  // Cruzamento por email, email-local, nome exato e nome primeiro+último
+  const matches = useMemo<MatchInfo[]>(() => {
+    const byEmail = new Map<string, typeof users[number]>();
+    const byEmailLocal = new Map<string, typeof users[number]>();
+    const byNome = new Map<string, typeof users[number]>();
+    const byFirstLast = new Map<string, typeof users[number]>();
+
+    for (const u of users) {
+      const e = (u.email || "").toLowerCase().trim();
+      if (e) {
+        byEmail.set(e, u);
+        const lp = localPart(e);
+        if (lp) byEmailLocal.set(lp, u);
+      }
+      const n = norm(u.name);
+      if (n) byNome.set(n, u);
+      const fl = firstLastKey(u.name);
+      if (fl) byFirstLast.set(fl, u);
+    }
+
+    return (buzzAtivos as BuzzUser[]).map(buzz => {
+      const e = (buzz.email || "").toLowerCase().trim();
+      const lp = localPart(e);
+      const n = norm(buzz.nome);
+      const fl = firstLastKey(buzz.nome);
+
+      let matched: typeof users[number] | undefined;
+      let reason: string | null = null;
+
+      if (e && byEmail.has(e)) { matched = byEmail.get(e); reason = "email idêntico"; }
+      else if (lp && byEmailLocal.has(lp)) { matched = byEmailLocal.get(lp); reason = "mesmo local do email"; }
+      else if (n && byNome.has(n)) { matched = byNome.get(n); reason = "nome idêntico"; }
+      else if (fl && byFirstLast.has(fl)) { matched = byFirstLast.get(fl); reason = "primeiro nome + sobrenome"; }
+
+      return {
+        buzz,
+        matchedUser: matched ? { id: matched.id, name: matched.name, email: matched.email } : null,
+        matchReason: reason,
+      };
     });
   }, [users, open]);
 
-  const faltantesFiltrados = useMemo(() => {
-    if (!search.trim()) return faltantes;
-    const s = norm(search);
-    return faltantes.filter(f => norm(f.nome).includes(s) || (f.email || "").toLowerCase().includes(s));
-  }, [faltantes, search]);
+  const faltantes = useMemo(() => matches.filter(m => !m.matchedUser), [matches]);
+  const jaCadastrados = useMemo(() => matches.filter(m => m.matchedUser), [matches]);
 
-  const toggle = (email: string) => {
+  const listaVisivel = useMemo(() => {
+    const fonte = mostrarTodos ? matches : faltantes;
+    if (!search.trim()) return fonte;
+    const s = norm(search);
+    return fonte.filter(m =>
+      norm(m.buzz.nome).includes(s) ||
+      (m.buzz.email || "").toLowerCase().includes(s)
+    );
+  }, [matches, faltantes, mostrarTodos, search]);
+
+  const toggle = (email: string, blocked: boolean) => {
+    if (blocked) return;
     setSelectedEmails(prev => {
       const next = new Set(prev);
       if (next.has(email)) next.delete(email);
@@ -63,11 +127,18 @@ export function ImportarBitrixDialog({ open, onOpenChange }: ImportarBitrixDialo
     });
   };
 
+  // Só marca/desmarca os disponíveis (sem match)
   const toggleAll = () => {
-    if (selectedEmails.size === faltantesFiltrados.length) {
-      setSelectedEmails(new Set());
+    const disponiveis = listaVisivel.filter(m => !m.matchedUser).map(m => m.buzz.email);
+    const todosMarcados = disponiveis.every(e => selectedEmails.has(e));
+    if (todosMarcados) {
+      const next = new Set(selectedEmails);
+      disponiveis.forEach(e => next.delete(e));
+      setSelectedEmails(next);
     } else {
-      setSelectedEmails(new Set(faltantesFiltrados.map(f => f.email)));
+      const next = new Set(selectedEmails);
+      disponiveis.forEach(e => next.add(e));
+      setSelectedEmails(next);
     }
   };
 
@@ -85,7 +156,10 @@ export function ImportarBitrixDialog({ open, onOpenChange }: ImportarBitrixDialo
     let ok = 0;
     const falhas: { nome: string; erro: string }[] = [];
 
-    const aImportar = faltantes.filter(f => selectedEmails.has(f.email));
+    // Trava extra: só cria pra quem está em "faltantes" no momento do clique
+    const aImportar = faltantes
+      .filter(m => selectedEmails.has(m.buzz.email))
+      .map(m => m.buzz);
     for (const buzz of aImportar) {
       try {
         const metadata: Record<string, any> = {
@@ -139,9 +213,9 @@ export function ImportarBitrixDialog({ open, onOpenChange }: ImportarBitrixDialo
         <DialogHeader>
           <DialogTitle>Importar do Bitrix</DialogTitle>
           <DialogDescription>
-            {faltantes.length} usuário(s) ativo(s) na Buzz (Bitrix) ainda não estão no Ofertativa.
-            Marque quem quer criar. Todos entram como corretor com a senha padrão informada,
-            e podem trocar a senha no 1º acesso.
+            <strong>{faltantes.length}</strong> ativo(s) na Buzz sem login no Ofertativa ·
+            <strong> {jaCadastrados.length}</strong> já têm conta (travados).
+            Marque quem criar. Todos entram como corretor com a senha padrão e trocam no 1º acesso.
           </DialogDescription>
         </DialogHeader>
 
@@ -171,20 +245,30 @@ export function ImportarBitrixDialog({ open, onOpenChange }: ImportarBitrixDialo
             </div>
           </div>
 
-          <Input
-            placeholder="Buscar por nome ou email..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
+          <div className="flex items-center gap-2">
+            <Input
+              placeholder="Buscar por nome ou email..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="flex-1"
+            />
+            <label className="flex items-center gap-2 text-sm whitespace-nowrap cursor-pointer">
+              <Checkbox checked={mostrarTodos} onCheckedChange={(v) => setMostrarTodos(!!v)} />
+              Mostrar todos
+            </label>
+          </div>
 
           <div className="flex items-center justify-between text-sm">
             <div className="flex items-center gap-2">
               <Checkbox
-                checked={faltantesFiltrados.length > 0 && selectedEmails.size === faltantesFiltrados.length}
+                checked={
+                  listaVisivel.filter(m => !m.matchedUser).length > 0 &&
+                  listaVisivel.filter(m => !m.matchedUser).every(m => selectedEmails.has(m.buzz.email))
+                }
                 onCheckedChange={toggleAll}
               />
               <span>
-                {selectedEmails.size} de {faltantesFiltrados.length} selecionado(s)
+                {selectedEmails.size} selecionado(s) · {listaVisivel.length} visível(eis)
               </span>
             </div>
             {selectedEmails.size > 0 && (
@@ -195,7 +279,7 @@ export function ImportarBitrixDialog({ open, onOpenChange }: ImportarBitrixDialo
           </div>
 
           <ScrollArea className="h-[320px] border rounded-md p-2">
-            {faltantesFiltrados.length === 0 ? (
+            {listaVisivel.length === 0 ? (
               <p className="text-center text-sm text-muted-foreground py-8">
                 {faltantes.length === 0
                   ? "🎉 Todo mundo do Bitrix já está no Ofertativa."
@@ -203,22 +287,42 @@ export function ImportarBitrixDialog({ open, onOpenChange }: ImportarBitrixDialo
               </p>
             ) : (
               <ul className="space-y-1">
-                {faltantesFiltrados.map(f => (
-                  <li
-                    key={f.email}
-                    className="flex items-center gap-3 p-2 hover:bg-accent rounded cursor-pointer"
-                    onClick={() => toggle(f.email)}
-                  >
-                    <Checkbox
-                      checked={selectedEmails.has(f.email)}
-                      onCheckedChange={() => toggle(f.email)}
-                    />
-                    <div className="flex-1 min-w-0">
-                      <div className="font-medium truncate">{f.nome}</div>
-                      <div className="text-xs text-muted-foreground truncate">{f.email}</div>
-                    </div>
-                  </li>
-                ))}
+                {listaVisivel.map(m => {
+                  const blocked = !!m.matchedUser;
+                  return (
+                    <li
+                      key={m.buzz.email}
+                      className={`flex items-center gap-3 p-2 rounded ${
+                        blocked
+                          ? "opacity-60 bg-muted/40 cursor-not-allowed"
+                          : "hover:bg-accent cursor-pointer"
+                      }`}
+                      onClick={() => toggle(m.buzz.email, blocked)}
+                    >
+                      <Checkbox
+                        checked={selectedEmails.has(m.buzz.email)}
+                        disabled={blocked}
+                        onCheckedChange={() => toggle(m.buzz.email, blocked)}
+                      />
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium truncate flex items-center gap-2">
+                          {m.buzz.nome}
+                          {blocked && (
+                            <Badge variant="outline" className="text-xs">
+                              já cadastrado · {m.matchReason}
+                            </Badge>
+                          )}
+                        </div>
+                        <div className="text-xs text-muted-foreground truncate">
+                          {m.buzz.email}
+                          {m.matchedUser && (
+                            <> · ↔ {m.matchedUser.name} ({m.matchedUser.email})</>
+                          )}
+                        </div>
+                      </div>
+                    </li>
+                  );
+                })}
               </ul>
             )}
           </ScrollArea>
