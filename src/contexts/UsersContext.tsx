@@ -148,6 +148,16 @@ export function UsersProvider({ children }: { children: ReactNode }) {
     }
 
     try {
+      // Limpar dependências antes do delete do profile.
+      // assignments.corretor_id é NOT NULL no schema, então ON DELETE SET NULL quebra.
+      // Esses assignments são apenas atribuições de distribuição: os leads em si têm
+      // sua própria FK SET NULL e ficam preservados no histórico.
+      const { error: assignErr } = await supabase
+        .from("assignments")
+        .delete()
+        .eq("corretor_id", id);
+      if (assignErr) throw assignErr;
+
       const { error } = await supabase.from("profiles").delete().eq("id", id);
 
       if (error) throw error;
