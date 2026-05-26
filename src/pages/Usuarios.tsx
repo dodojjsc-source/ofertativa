@@ -14,6 +14,7 @@ import {
 import { useUsers, AppUser } from "@/contexts/UsersContext";
 import { UserDialog } from "@/components/UserDialog";
 import { InvitationDialog } from "@/components/InvitationDialog";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Plus, Pencil, Trash2, Search, Mail, ChevronDown } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import {
@@ -35,6 +36,9 @@ export default function Usuarios() {
   const [editingUser, setEditingUser] = useState<AppUser | undefined>();
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [userToDelete, setUserToDelete] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkDialogOpen, setBulkDialogOpen] = useState(false);
+  const [bulkProcessing, setBulkProcessing] = useState(false);
 
   const filteredUsers = users.filter((user) =>
     user.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -105,6 +109,49 @@ export default function Usuarios() {
     });
   };
 
+  const toggleSelect = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === filteredUsers.length && filteredUsers.length > 0) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(filteredUsers.map(u => u.id)));
+    }
+  };
+
+  const confirmBulkDelete = async () => {
+    setBulkProcessing(true);
+    const ids = Array.from(selectedIds);
+    let ok = 0;
+    const falhas: string[] = [];
+
+    for (const id of ids) {
+      const u = getUserById(id);
+      const sucesso = await deleteUser(id);
+      if (sucesso) ok++;
+      else falhas.push(u?.name || id);
+    }
+
+    setBulkProcessing(false);
+    setBulkDialogOpen(false);
+    setSelectedIds(new Set());
+
+    toast({
+      title: `${ok} usuário(s) removido(s)`,
+      description: falhas.length
+        ? `Falharam: ${falhas.join(", ")}`
+        : "Leads desses corretores ficaram no histórico como 'Sem corretor'.",
+      variant: falhas.length ? "destructive" : "default",
+    });
+  };
+
   return (
     <Layout>
       <div className="space-y-6">
@@ -113,25 +160,36 @@ export default function Usuarios() {
             <h1 className="text-3xl font-bold">Usuários</h1>
             <p className="text-muted-foreground">Gerenciar acesso ao sistema</p>
           </div>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button>
-                <Plus className="mr-2 h-4 w-4" />
-                Novo Usuário
-                <ChevronDown className="ml-2 h-4 w-4" />
+          <div className="flex items-center gap-2">
+            {selectedIds.size > 0 && (
+              <Button
+                variant="destructive"
+                onClick={() => setBulkDialogOpen(true)}
+              >
+                <Trash2 className="mr-2 h-4 w-4" />
+                Apagar selecionados ({selectedIds.size})
               </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => setInviteDialogOpen(true)}>
-                <Mail className="mr-2 h-4 w-4" />
-                Enviar Convite
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setDialogOpen(true)}>
-                <Plus className="mr-2 h-4 w-4" />
-                Criar Usuário Direto
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+            )}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Novo Usuário
+                  <ChevronDown className="ml-2 h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => setInviteDialogOpen(true)}>
+                  <Mail className="mr-2 h-4 w-4" />
+                  Enviar Convite
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setDialogOpen(true)}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Criar Usuário Direto
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </div>
 
         <Card>
@@ -153,6 +211,13 @@ export default function Usuarios() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-10">
+                    <Checkbox
+                      checked={filteredUsers.length > 0 && selectedIds.size === filteredUsers.length}
+                      onCheckedChange={toggleSelectAll}
+                      aria-label="Selecionar todos"
+                    />
+                  </TableHead>
                   <TableHead>Nome</TableHead>
                   <TableHead>Email</TableHead>
                   <TableHead>Telefone</TableHead>
@@ -166,7 +231,7 @@ export default function Usuarios() {
               <TableBody>
                 {filteredUsers.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center text-muted-foreground">
+                    <TableCell colSpan={9} className="text-center text-muted-foreground">
                       Nenhum usuário encontrado
                     </TableCell>
                   </TableRow>
@@ -174,9 +239,16 @@ export default function Usuarios() {
                   filteredUsers.map((user) => {
                     const gestor = user.gestorId ? getUserById(user.gestorId) : null;
                     const corretoresCount = user.role === "gestor" ? getCorretoresByGestor(user.id).length : 0;
-                    
+
                     return (
-                      <TableRow key={user.id}>
+                      <TableRow key={user.id} data-state={selectedIds.has(user.id) ? "selected" : undefined}>
+                        <TableCell>
+                          <Checkbox
+                            checked={selectedIds.has(user.id)}
+                            onCheckedChange={() => toggleSelect(user.id)}
+                            aria-label={`Selecionar ${user.name}`}
+                          />
+                        </TableCell>
                         <TableCell className="font-medium">{user.name}</TableCell>
                         <TableCell>{user.email}</TableCell>
                         <TableCell>{user.telefone || "-"}</TableCell>
@@ -227,6 +299,23 @@ export default function Usuarios() {
         open={inviteDialogOpen}
         onOpenChange={setInviteDialogOpen}
       />
+
+      <AlertDialog open={bulkDialogOpen} onOpenChange={(o) => !bulkProcessing && setBulkDialogOpen(o)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Apagar {selectedIds.size} usuário(s)?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Os leads e atendimentos desses corretores permanecem no histórico, só ficam sem corretor vinculado. Gestores com corretores ativos não serão apagados. Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={bulkProcessing}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmBulkDelete} disabled={bulkProcessing}>
+              {bulkProcessing ? "Apagando..." : "Apagar todos"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
