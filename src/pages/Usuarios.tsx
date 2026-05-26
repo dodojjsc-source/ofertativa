@@ -16,6 +16,7 @@ import { UserDialog } from "@/components/UserDialog";
 import { InvitationDialog } from "@/components/InvitationDialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Plus, Pencil, Trash2, Search, Mail, ChevronDown } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "@/hooks/use-toast";
 import {
   AlertDialog,
@@ -39,11 +40,29 @@ export default function Usuarios() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkDialogOpen, setBulkDialogOpen] = useState(false);
   const [bulkProcessing, setBulkProcessing] = useState(false);
+  const [filterGestor, setFilterGestor] = useState<string>("todos");
+  const [filterRole, setFilterRole] = useState<string>("todos");
+  const [filterStatus, setFilterStatus] = useState<string>("todos");
 
-  const filteredUsers = users.filter((user) =>
-    user.name.toLowerCase().includes(search.toLowerCase()) ||
-    user.email.toLowerCase().includes(search.toLowerCase())
-  );
+  const gestores = users.filter(u => u.role === "gestor").sort((a, b) => a.name.localeCompare(b.name));
+
+  const filteredUsers = users.filter((u) => {
+    if (search) {
+      const s = search.toLowerCase();
+      if (!u.name.toLowerCase().includes(s) && !u.email.toLowerCase().includes(s)) return false;
+    }
+    if (filterRole !== "todos" && u.role !== filterRole) return false;
+    if (filterStatus !== "todos" && u.status !== filterStatus) return false;
+    if (filterGestor !== "todos") {
+      if (filterGestor === "sem_gestor") {
+        if (u.role !== "corretor" || u.gestorId) return false;
+      } else {
+        // mostra o próprio gestor + seus corretores
+        if (u.id !== filterGestor && u.gestorId !== filterGestor) return false;
+      }
+    }
+    return true;
+  });
 
   const getRoleBadge = (role: string) => {
     const variants: Record<string, "default" | "secondary" | "outline"> = {
@@ -193,7 +212,7 @@ export default function Usuarios() {
         </div>
 
         <Card>
-          <CardContent className="p-4">
+          <CardContent className="p-4 space-y-3">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
@@ -202,6 +221,60 @@ export default function Usuarios() {
                 onChange={(e) => setSearch(e.target.value)}
                 className="pl-10"
               />
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+              <Select value={filterGestor} onValueChange={setFilterGestor}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Filtrar por gestor" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todos os gestores</SelectItem>
+                  <SelectItem value="sem_gestor">Corretores sem gestor</SelectItem>
+                  {gestores.map(g => (
+                    <SelectItem key={g.id} value={g.id}>
+                      {g.name} (equipe)
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select value={filterRole} onValueChange={setFilterRole}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Perfil" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todos os perfis</SelectItem>
+                  <SelectItem value="admin">Admin</SelectItem>
+                  <SelectItem value="gestor">Gestor</SelectItem>
+                  <SelectItem value="corretor">Corretor</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select value={filterStatus} onValueChange={setFilterStatus}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todos os status</SelectItem>
+                  <SelectItem value="ativo">Ativos</SelectItem>
+                  <SelectItem value="inativo">Inativos</SelectItem>
+                </SelectContent>
+              </Select>
+              <div className="flex items-center justify-between text-sm text-muted-foreground">
+                <span>{filteredUsers.length} de {users.length} usuários</span>
+                {(filterGestor !== "todos" || filterRole !== "todos" || filterStatus !== "todos" || search) && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setSearch("");
+                      setFilterGestor("todos");
+                      setFilterRole("todos");
+                      setFilterStatus("todos");
+                    }}
+                  >
+                    Limpar
+                  </Button>
+                )}
+              </div>
             </div>
           </CardContent>
         </Card>
