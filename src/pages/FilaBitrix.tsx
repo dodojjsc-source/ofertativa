@@ -33,18 +33,37 @@ export default function FilaBitrix() {
     search: "",
   });
 
+  // Helper: corretorIds vinculados a um gestor via relação viva (item.gestorId pode estar nulo)
+  const corretorIdsDoGestor = (gestorId: string) =>
+    new Set(
+      users
+        .filter(u => u.role === "corretor" && u.gestorId === gestorId)
+        .map(u => u.id)
+    );
+
   // Filtrar dados baseado no perfil do usuário
   const visibleQueue = useMemo(() => {
     if (!user) return [];
-    
-    let items = user.role === "admin" ? queue : getQueueByGestor(user.id);
-    
+
+    let items = queue;
+    if (user.role !== "admin") {
+      const meusCorretores = corretorIdsDoGestor(user.id);
+      items = items.filter(item =>
+        item.gestorId === user.id ||
+        (item.corretorId ? meusCorretores.has(item.corretorId) : false)
+      );
+    }
+
     // Aplicar filtros
     if (filters.status !== "todos") {
       items = items.filter((item) => item.statusFila === filters.status);
     }
     if (filters.gestorId !== "todos") {
-      items = items.filter((item) => item.gestorId === filters.gestorId);
+      const corretoresDoGestor = corretorIdsDoGestor(filters.gestorId);
+      items = items.filter(item =>
+        item.gestorId === filters.gestorId ||
+        (item.corretorId ? corretoresDoGestor.has(item.corretorId) : false)
+      );
     }
     if (filters.corretorId !== "todos") {
       items = items.filter((item) => item.corretorId === filters.corretorId);

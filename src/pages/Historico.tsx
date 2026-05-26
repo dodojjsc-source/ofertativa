@@ -16,7 +16,7 @@ import { EditarFeedbackDialog } from "@/components/EditarFeedbackDialog";
 
 export default function Historico() {
   const { user } = useAuth();
-  const { leads, getLeadsByCorretor, getLeadsByGestor, deleteLead } = useLeads();
+  const { leads, getLeadsByCorretor, deleteLead } = useLeads();
   const { filters } = useFilters();
   const { users } = useUsers();
   
@@ -24,30 +24,39 @@ export default function Historico() {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
 
   const getFilteredLeads = () => {
-    let filtered = leads.filter((l) => 
-      l.status === "atendido" || 
+    const isProcessado = (l: Lead) =>
+      l.status === "atendido" ||
       l.status === "nao_atendido" ||
-      (l.status === "pendente" && (l.tentativasContato || 0) > 0)
-    );
+      (l.status === "pendente" && (l.tentativasContato || 0) > 0);
+
+    // Helper: corretorIds vinculados a um gestor (relação viva, não confia em lead.gestorId)
+    const corretorIdsDoGestor = (gestorId: string) =>
+      new Set(
+        users
+          .filter(u => u.role === "corretor" && u.gestorId === gestorId)
+          .map(u => u.id)
+      );
+
+    let filtered = leads.filter(isProcessado);
 
     // Filtrar por role do usuário
     if (user?.role === "gestor") {
-      filtered = getLeadsByGestor(user.id).filter((l) => 
-        l.status === "atendido" || 
-        l.status === "nao_atendido" ||
-        (l.status === "pendente" && (l.tentativasContato || 0) > 0)
+      const meusCorretores = corretorIdsDoGestor(user.id);
+      filtered = filtered.filter(l =>
+        l.gestorId === user.id ||
+        (l.corretorId ? meusCorretores.has(l.corretorId) : false)
       );
     } else if (user?.role === "corretor") {
-      filtered = getLeadsByCorretor(user.id).filter((l) => 
-        l.status === "atendido" || 
-        l.status === "nao_atendido" ||
-        (l.status === "pendente" && (l.tentativasContato || 0) > 0)
-      );
+      filtered = getLeadsByCorretor(user.id).filter(isProcessado);
     }
 
     // Aplicar filtros adicionais
     if (filters.gestorId) {
-      filtered = filtered.filter((l) => l.gestorId === filters.gestorId);
+      const corretoresDoGestor = corretorIdsDoGestor(filters.gestorId);
+      filtered = filtered.filter(l =>
+        l.gestorId === filters.gestorId ||
+        (l.corretorId ? corretoresDoGestor.has(l.corretorId) : false)
+      );
     }
     if (filters.corretorId) {
       filtered = filtered.filter((l) => l.corretorId === filters.corretorId);
