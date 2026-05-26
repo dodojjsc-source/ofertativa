@@ -1,7 +1,6 @@
 import { Layout } from "@/components/Layout";
 import { useFilters } from "@/contexts/FiltersContext";
 import { useMetrics } from "@/hooks/useMetrics";
-import { useUsers } from "@/contexts/UsersContext";
 import { ProductionFilters } from "@/components/production/ProductionFilters";
 import { KPICards } from "@/components/production/KPICards";
 import { RankingTable } from "@/components/production/RankingTable";
@@ -15,12 +14,17 @@ import { DataQualityCards } from "@/components/production/DataQualityCards";
 
 export default function Producao() {
   const { filters } = useFilters();
-  const { users } = useUsers();
   const metrics = useMetrics(filters);
 
-  const corretores = users
-    .filter(u => u.role === "corretor" && u.status === "ativo")
-    .map(u => ({ id: u.id, name: u.name }));
+  // Lista de corretores do gráfico/donut respeita os filtros aplicados (gestor/corretor/role)
+  // Limita a Top 10 por ligações pra legenda não estourar com base inteira
+  const corretores = [...metrics.rankingCorretores]
+    .sort((a, b) => b.ligacoes - a.ligacoes)
+    .slice(0, 10)
+    .map(c => ({
+      id: c.corretorId,
+      name: c.corretorName,
+    }));
 
   return (
     <Layout>
