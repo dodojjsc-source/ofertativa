@@ -146,12 +146,25 @@ export function useMetrics(filters: Filters) {
     
     // Criar mapa de campanhas (nome -> id)
     const campanhaMap = new Map(campanhas.map(c => [c.nome, c.id]));
-    
+
+    // Set de corretorIds vinculados ao gestor filtrado (relação viva via users)
+    const corretorIdsDoGestor = effectiveFilters.gestorId
+      ? new Set(
+          users
+            .filter(u => u.role === "corretor" && u.gestorId === effectiveFilters.gestorId)
+            .map(u => u.id)
+        )
+      : null;
+
     // Aplicar filtros aos leads
     let filteredLeads = leads;
 
     if (effectiveFilters.gestorId) {
-      filteredLeads = filteredLeads.filter(l => l.gestorId === effectiveFilters.gestorId);
+      // Filtra pela relação viva corretor→gestor (lead.gestorId pode estar nulo/desatualizado)
+      filteredLeads = filteredLeads.filter(l =>
+        l.gestorId === effectiveFilters.gestorId ||
+        (l.corretorId ? corretorIdsDoGestor!.has(l.corretorId) : false)
+      );
     }
 
     if (effectiveFilters.corretorId) {
@@ -179,7 +192,10 @@ export function useMetrics(filters: Filters) {
     // Opt-outs filtrados conforme filtros aplicados
     let filteredOptouts = optouts;
     if (effectiveFilters.gestorId) {
-      filteredOptouts = filteredOptouts.filter(o => o.gestorId === effectiveFilters.gestorId);
+      filteredOptouts = filteredOptouts.filter(o =>
+        o.gestorId === effectiveFilters.gestorId ||
+        (o.corretorId ? corretorIdsDoGestor!.has(o.corretorId) : false)
+      );
     }
     if (effectiveFilters.corretorId) {
       filteredOptouts = filteredOptouts.filter(o => o.corretorId === effectiveFilters.corretorId);
@@ -196,7 +212,10 @@ export function useMetrics(filters: Filters) {
     // Contatos errados filtrados conforme filtros aplicados
     let filteredContatosErrados = contatosErrados;
     if (effectiveFilters.gestorId) {
-      filteredContatosErrados = filteredContatosErrados.filter(c => c.gestorId === effectiveFilters.gestorId);
+      filteredContatosErrados = filteredContatosErrados.filter(c =>
+        c.gestorId === effectiveFilters.gestorId ||
+        (c.corretorId ? corretorIdsDoGestor!.has(c.corretorId) : false)
+      );
     }
     if (effectiveFilters.corretorId) {
       filteredContatosErrados = filteredContatosErrados.filter(c => c.corretorId === effectiveFilters.corretorId);
@@ -341,7 +360,12 @@ export function useMetrics(filters: Filters) {
     });
 
     // Métricas por corretor
-    const corretores = users.filter(u => u.role === "corretor" && u.status === "ativo");
+    const corretores = users.filter(u => {
+      if (u.role !== "corretor" || u.status !== "ativo") return false;
+      if (effectiveFilters.gestorId && u.gestorId !== effectiveFilters.gestorId) return false;
+      if (effectiveFilters.corretorId && u.id !== effectiveFilters.corretorId) return false;
+      return true;
+    });
     const rankingCorretores: CorretorMetrics[] = corretores.map(corretor => {
       const corretorLeads = filteredLeads.filter(l => l.corretorId === corretor.id);
       // Atendimentos = leads que o corretor FALOU com alguém (interessado, agendado, recusou)

@@ -27,7 +27,11 @@ export function ProductionFilters() {
     : [];
     
   const corretores = user?.role === "admin"
-    ? users.filter(u => u.role === "corretor" && u.status === "ativo")
+    ? users.filter(u =>
+        u.role === "corretor" &&
+        u.status === "ativo" &&
+        (!filters.gestorId || u.gestorId === filters.gestorId)
+      )
     : user?.role === "gestor"
     ? users.filter(u => u.role === "corretor" && u.status === "ativo" && u.gestorId === user.id)
     : [];
@@ -68,9 +72,17 @@ export function ProductionFilters() {
                   <Label>Gestor</Label>
                   <Select
                     value={filters.gestorId || "all"}
-                    onValueChange={(value) => 
-                      setFilters({ ...filters, gestorId: value === "all" ? undefined : value })
-                    }
+                    onValueChange={(value) => {
+                      const newGestorId = value === "all" ? undefined : value;
+                      // Se o corretor atualmente selecionado não pertence ao novo gestor, limpa
+                      const corretorAindaValido = !filters.corretorId || !newGestorId ||
+                        users.some(u => u.id === filters.corretorId && u.gestorId === newGestorId);
+                      setFilters({
+                        ...filters,
+                        gestorId: newGestorId,
+                        corretorId: corretorAindaValido ? filters.corretorId : undefined,
+                      });
+                    }}
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Todos" />
