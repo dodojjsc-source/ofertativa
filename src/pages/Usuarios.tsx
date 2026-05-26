@@ -14,6 +14,7 @@ import {
 import { useUsers, AppUser } from "@/contexts/UsersContext";
 import { UserDialog } from "@/components/UserDialog";
 import { InvitationDialog } from "@/components/InvitationDialog";
+import { ImportarBitrixDialog } from "@/components/ImportarBitrixDialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Plus, Pencil, Trash2, Search, Mail, ChevronDown } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -40,6 +41,7 @@ export default function Usuarios() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkDialogOpen, setBulkDialogOpen] = useState(false);
   const [bulkProcessing, setBulkProcessing] = useState(false);
+  const [importBitrixOpen, setImportBitrixOpen] = useState(false);
   const [filterGestor, setFilterGestor] = useState<string>("todos");
   const [filterRole, setFilterRole] = useState<string>("todos");
   const [filterStatus, setFilterStatus] = useState<string>("todos");
@@ -198,6 +200,10 @@ export default function Usuarios() {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => setImportBitrixOpen(true)}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Importar do Bitrix
+                </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setInviteDialogOpen(true)}>
                   <Mail className="mr-2 h-4 w-4" />
                   Enviar Convite
@@ -371,6 +377,11 @@ export default function Usuarios() {
       <InvitationDialog
         open={inviteDialogOpen}
         onOpenChange={setInviteDialogOpen}
+      />
+
+      <ImportarBitrixDialog
+        open={importBitrixOpen}
+        onOpenChange={setImportBitrixOpen}
       />
 
       <AlertDialog open={bulkDialogOpen} onOpenChange={(o) => !bulkProcessing && setBulkDialogOpen(o)}>
