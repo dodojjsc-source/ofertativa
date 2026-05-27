@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useUsers } from "@/contexts/UsersContext";
 import { useAssignments } from "@/contexts/AssignmentsContext";
 import { useAuth } from "@/contexts/AuthContext";
@@ -13,7 +14,7 @@ import { useLeads } from "@/contexts/LeadsContext";
 import { useCampanhas } from "@/contexts/CampanhasContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2 } from "lucide-react";
+import { Loader2, Search, X } from "lucide-react";
 
 interface DistribuirLoteDialogProps {
   campanhaId: string;
@@ -40,11 +41,39 @@ export function DistribuirLoteDialog({
   const [corretoresSelecionados, setCorretoresSelecionados] = useState<string[]>([]);
   const [leadsPorCorretor, setLeadsPorCorretor] = useState<number>(10);
   const [processando, setProcessando] = useState(false);
+  const [busca, setBusca] = useState("");
+  const [gestorFiltro, setGestorFiltro] = useState<string>("todos");
 
   // Filtrar apenas corretores ativos
-  const corretoresAtivos = users.filter(
-    (u) => u.role === "corretor" && u.status === "ativo"
+  const corretoresAtivos = useMemo(
+    () => users.filter((u) => u.role === "corretor" && u.status === "ativo"),
+    [users]
   );
+
+  // Gestores ativos disponíveis no filtro
+  const gestores = useMemo(
+    () =>
+      users
+        .filter((u) => u.role === "gestor" && u.status === "ativo")
+        .sort((a, b) => a.name.localeCompare(b.name)),
+    [users]
+  );
+
+  // Corretores após aplicar busca + filtro de gerente
+  const corretoresFiltrados = useMemo(() => {
+    const termo = busca.trim().toLowerCase();
+    return corretoresAtivos.filter((c) => {
+      const matchNome = termo === "" || c.name.toLowerCase().includes(termo);
+      const matchGestor =
+        gestorFiltro === "todos" ||
+        (gestorFiltro === "sem-gestor" ? !c.gestorId : c.gestorId === gestorFiltro);
+      return matchNome && matchGestor;
+    });
+  }, [corretoresAtivos, busca, gestorFiltro]);
+
+  const idsVisiveis = corretoresFiltrados.map((c) => c.id);
+  const todosVisiveisSelecionados =
+    idsVisiveis.length > 0 && idsVisiveis.every((id) => corretoresSelecionados.includes(id));
 
   const totalADistribuir = corretoresSelecionados.length * leadsPorCorretor;
   const distribuicaoValida = totalADistribuir > 0 && totalADistribuir <= leadsDisponiveis;
@@ -139,11 +168,21 @@ export function DistribuirLoteDialog({
     }
   };
 
+  const toggleTodosVisiveis = () => {
+    if (todosVisiveisSelecionados) {
+      setCorretoresSelecionados((prev) => prev.filter((id) => !idsVisiveis.includes(id)));
+    } else {
+      setCorretoresSelecionados((prev) => Array.from(new Set([...prev, ...idsVisiveis])));
+    }
+  };
+
   // Reset ao abrir
   useEffect(() => {
     if (open) {
       setCorretoresSelecionados([]);
       setLeadsPorCorretor(10);
+      setBusca("");
+      setGestorFiltro("todos");
     }
   }, [open]);
 
@@ -172,17 +211,73 @@ export function DistribuirLoteDialog({
             />
           </div>
 
+          {/* Filtros de busca e gerente */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <div className="relative">
+              <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Buscar corretor por nome"
+                value={busca}
+                onChange={(e) => setBusca(e.target.value)}
+                disabled={processando}
+                className="pl-8 pr-8"
+              />
+              {busca && (
+                <button
+                  type="button"
+                  onClick={() => setBusca("")}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  aria-label="Limpar busca"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+            <Select value={gestorFiltro} onValueChange={setGestorFiltro} disabled={processando}>
+              <SelectTrigger>
+                <SelectValue placeholder="Filtrar por gerente" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Todos os gerentes</SelectItem>
+                <SelectItem value="sem-gestor">Sem gerente</SelectItem>
+                {gestores.map((g) => (
+                  <SelectItem key={g.id} value={g.id}>
+                    {g.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
           {/* Lista de corretores */}
           <div className="space-y-2">
-            <Label>Selecionar corretores</Label>
+            <div className="flex items-center justify-between">
+              <Label>Selecionar corretores</Label>
+              {corretoresFiltrados.length > 0 && (
+                <button
+                  type="button"
+                  onClick={toggleTodosVisiveis}
+                  className="text-xs text-primary hover:underline"
+                  disabled={processando}
+                >
+                  {todosVisiveisSelecionados
+                    ? `Desmarcar ${corretoresFiltrados.length} visíveis`
+                    : `Selecionar ${corretoresFiltrados.length} visíveis`}
+                </button>
+              )}
+            </div>
             <ScrollArea className="h-64 rounded-md border p-4">
               {corretoresAtivos.length === 0 ? (
                 <p className="text-sm text-muted-foreground text-center py-4">
                   Nenhum corretor ativo disponível
                 </p>
+              ) : corretoresFiltrados.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-4">
+                  Nenhum corretor encontrado com os filtros aplicados
+                </p>
               ) : (
                 <div className="space-y-3">
-                  {corretoresAtivos.map((corretor) => {
+                  {corretoresFiltrados.map((corretor) => {
                     const leadsPendentes = leads.filter(
                       (l) => l.corretorId === corretor.id && l.status === "pendente"
                     ).length;
