@@ -412,6 +412,168 @@ Retorne JSON com array "copies" (${quantidade} variações estruturalmente difer
         return json({ id: novo.id, classificacao: cl.classificacao, motivo: cl.motivo, score: cl.score });
       }
 
+      case "plantao-bootstrap": {
+        // Cria plantão completo a partir de campanha existente do Ofertativa
+        // Input: { nome_plantao, descricao?, campanha_nome | campanha_id, pilares[], eflyer_url?, chip_instance?, status? }
+        const { nome_plantao, descricao, campanha_nome, campanha_id, pilares, eflyer_url, chip_instance, status } = body;
+        if (!nome_plantao) return json({ error: "nome_plantao required" }, 400);
+        if (!Array.isArray(pilares) || pilares.length < 2) return json({ error: "minimo 2 pilares" }, 400);
+
+        // 1. Achar campanha
+        let camp: any = null;
+        if (campanha_id) {
+          const { data } = await admin.from("campanhas").select("*").eq("id", campanha_id).single();
+          camp = data;
+        } else if (campanha_nome) {
+          const { data } = await admin.from("campanhas").select("*").ilike("nome", `%${campanha_nome}%`).limit(1);
+          camp = data?.[0];
+        }
+        if (!camp) return json({ error: "campanha não encontrada" }, 404);
+
+        // 2. Puxar leads da campanha
+        const { data: leadsRaw, error: eL } = await admin
+          .from("leads").select("id, nome, telefone, email")
+          .eq("campanha_id", camp.id);
+        if (eL) throw eL;
+
+        // 3. Normalizar telefones + dedup + cruzar optout
+        const validos: any[] = [];
+        const vistos = new Set<string>();
+        for (const l of leadsRaw || []) {
+          let d = String(l.telefone || "").replace(/\D/g, "");
+          if (d.length === 10 || d.length === 11) d = "55" + d;
+          if (d.length === 12) d = d.slice(0, 4) + "9" + d.slice(4);
+          if (d.length < 12 || d.length > 13 || /^(0+|9+|1+)$/.test(d)) continue;
+          if (vistos.has(d)) continue;
+          vistos.add(d);
+          validos.push({
+            nome: String(l.nome || "").split(" ").slice(0, 3).join(" "),
+            telefone: l.telefone,
+            telefone_norm: d,
+            email: l.email || null,
+            origem: "ofertativa:" + camp.nome,
+          });
+        }
+
+        // Cruzar com optout_contacts
+        if (validos.length > 0) {
+          const { data: optoutData } = await admin
+            .from("optout_contacts").select("telefone")
+            .in("telefone", validos.map(v => v.telefone_norm));
+          const optSet = new Set((optoutData || []).map((o: any) => o.telefone));
+          for (let i = validos.length - 1; i >= 0; i--) {
+            if (optSet.has(validos[i].telefone_norm)) validos.splice(i, 1);
+          }
+        }
+
+        if (validos.length === 0) return json({ error: "nenhum lead válido após filtros" }, 400);
+
+        // 4. Gerar copies via Gemini
+        let copies: string[] = [];
+        try {
+          const userPrompt = `Gere 5 copies de disparo WhatsApp.
+
+OFERTA: ${nome_plantao}
+
+PILARES:
+${(pilares as string[]).map((p, i) => `${i + 1}. ${p}`).join("\n")}
+
+${eflyer_url ? `E-FLYER (anexo): ${eflyer_url}\nMencione que está enviando o material.` : ""}
+
+CONTEXTO: pessoas que demonstraram interesse anterior em lançamentos imobiliários em Garopaba (SC) via Instagram. Você é da Buzz Imobiliária.
+
+Retorne JSON com array "copies" (5 variações estruturalmente diferentes).`;
+
+          const p = await geminiJson(GEMINI_COPY_SYS, userPrompt, {
+            type: "OBJECT",
+            properties: { copies: { type: "ARRAY", items: { type: "STRING" } } },
+            required: ["copies"],
+          }, 0.85);
+          copies = Array.isArray(p.copies) ? p.copies : [];
+          copies = copies.map((c: string) => {
+            let t = c.trim().replace(/—/g, ",").replace(/–/g, ",");
+            if (!/\{\{primeiro_nome\}\}|\{\{nome\}\}/i.test(t)) t = "Olá {{primeiro_nome}}, " + t;
+            if (!/sair|parar|descadastr/i.test(t)) t += "\n\nSe preferir não receber mais ofertas, responda SAIR.";
+            return t;
+          });
+        } catch (e: any) {
+          return json({ error: "Gemini falhou: " + (e.message || e) }, 500);
+        }
+
+        if (copies.length < 3) return json({ error: "Gemini gerou menos de 3 copies" }, 500);
+
+        // 5. Criar plantão
+        const { data: plantao, error: eP } = await admin.from("disparo_plantoes").insert({
+          nome: nome_plantao,
+          descricao: descricao || `Auto-criado de campanha "${camp.nome}"`,
+          status: status || "rascunho",
+          eflyer_url: eflyer_url || null,
+          pilares,
+          chip_instance: chip_instance || "buzz-alertas",
+          total_leads: validos.length,
+        }).select().single();
+        if (eP) throw eP;
+
+        // 6. Inserir copies
+        const { error: eC } = await admin.from("disparo_copies").insert(
+          copies.map((t, i) => ({
+            plantao_id: plantao.id, ordem: i + 1, texto: t, ativa: true, inclui_eflyer: !!eflyer_url,
+          })),
+        );
+        if (eC) throw eC;
+
+        // 7. Inserir fila em batches
+        const batchSize = 200;
+        for (let i = 0; i < validos.length; i += batchSize) {
+          const batch = validos.slice(i, i + batchSize);
+          const { error: eF } = await admin.from("disparo_fila").insert(
+            batch.map(v => ({
+              plantao_id: plantao.id,
+              nome: v.nome, telefone: v.telefone, telefone_norm: v.telefone_norm,
+              email: v.email, origem: v.origem,
+              status: "aguardando",
+            })),
+          );
+          if (eF) throw eF;
+        }
+
+        return json({
+          ok: true,
+          plantao_id: plantao.id,
+          campanha_nome: camp.nome,
+          leads_inseridos: validos.length,
+          leads_brutos: (leadsRaw || []).length,
+          copies_geradas: copies.length,
+          copies_preview: copies.map(c => c.slice(0, 80) + "..."),
+        });
+      }
+
+      case "plantao-add-teste": {
+        // Adiciona telefones de teste como primeiros da fila do plantão
+        const { plantao_id, telefones } = body;
+        if (!plantao_id || !Array.isArray(telefones) || telefones.length === 0) {
+          return json({ error: "plantao_id + telefones[] required" }, 400);
+        }
+        const inserts = telefones.map((t: any) => {
+          const tel = String(t.telefone || t).replace(/\D/g, "");
+          let d = tel;
+          if (d.length === 10 || d.length === 11) d = "55" + d;
+          if (d.length === 12) d = d.slice(0, 4) + "9" + d.slice(4);
+          return {
+            plantao_id,
+            nome: t.nome || "TESTE",
+            telefone: t.telefone || t,
+            telefone_norm: d,
+            origem: "teste",
+            status: "aguardando",
+            created_at: new Date(0).toISOString(), // garante que vem primeiro
+          };
+        });
+        const { data, error } = await admin.from("disparo_fila").insert(inserts).select();
+        if (error) throw error;
+        return json({ ok: true, inseridos: data?.length });
+      }
+
       case "plantao-recalc-stats": {
         const { plantao_id } = body;
         if (!plantao_id) return json({ error: "plantao_id required" }, 400);
