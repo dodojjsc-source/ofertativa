@@ -13,6 +13,10 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import { parseCsvText, ParseResult, ParsedLead, checarOptoutGlobal, validarCopy, COPY_OPTOUT_LINE } from "@/lib/plantao";
 import { useAuth } from "@/contexts/AuthContext";
+import { useCampanhas } from "@/contexts/CampanhasContext";
+import { useLeads } from "@/contexts/LeadsContext";
+import { normalizarTelefone } from "@/lib/phoneNormalization";
+import { Database } from "lucide-react";
 
 interface CopyDraft {
   texto: string;
@@ -26,9 +30,13 @@ const STEPS = [
   { n: 4, label: "Disparo" },
 ];
 
+type FonteLeads = "campanha" | "csv";
+
 export default function PlantaoNovo() {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { campanhas } = useCampanhas();
+  const { leads: leadsOfertativa } = useLeads();
   const [step, setStep] = useState(1);
   const [salvando, setSalvando] = useState(false);
 
@@ -37,20 +45,26 @@ export default function PlantaoNovo() {
   const [descricao, setDescricao] = useState("Oferta ativa Villa Setai para base Instagram Garopaba");
 
   // Step 2
+  const [fonte, setFonte] = useState<FonteLeads>("campanha");
+  const [campanhaSelecionada, setCampanhaSelecionada] = useState<string>("");
   const [csvText, setCsvText] = useState("");
   const [parseRes, setParseRes] = useState<ParseResult | null>(null);
   const [optoutCruzados, setOptoutCruzados] = useState<Set<string>>(new Set());
   const [leadsFinais, setLeadsFinais] = useState<ParsedLead[]>([]);
 
   // Step 3
-  const [eflyerUrl, setEflyerUrl] = useState("");
+  const [eflyerUrl, setEflyerUrl] = useState("https://hub.intelbuzz.com.br/plantao-assets/villasetai-flyer.jpg");
   const [videoUrl, setVideoUrl] = useState("");
-  const [pilares, setPilares] = useState<string[]>(["", "", ""]);
+  const [pilares, setPilares] = useState<string[]>([
+    "Localização premium frente mar Praia da Ferrugem em Garopaba",
+    "Valorização histórica acima de 40% nas fases anteriores entregues",
+    "Acabamento alto padrão com piscina infinity, lazer completo e arquitetura assinada",
+  ]);
   const [copies, setCopies] = useState<CopyDraft[]>([]);
   const [gerandoCopies, setGerandoCopies] = useState(false);
 
   // Step 4
-  const [chipInstance, setChipInstance] = useState("buzz-vs-oferta");
+  const [chipInstance, setChipInstance] = useState("buzz-alertas");
   const [ritmoMin, setRitmoMin] = useState(60);
   const [ritmoMax, setRitmoMax] = useState(90);
   const [volMaxDia, setVolMaxDia] = useState(80);
@@ -80,6 +94,54 @@ export default function PlantaoNovo() {
     const reader = new FileReader();
     reader.onload = e => processarCsv(String(e.target?.result || ""));
     reader.readAsText(file, "utf-8");
+  };
+
+  const importarDeCampanha = async (campanhaId: string) => {
+    setCampanhaSelecionada(campanhaId);
+    if (!campanhaId) {
+      setParseRes(null);
+      setLeadsFinais([]);
+      setOptoutCruzados(new Set());
+      return;
+    }
+    const leadsDaCampanha = leadsOfertativa.filter(l => l.campanhaId === campanhaId);
+    const validos: ParsedLead[] = [];
+    const descartados: ParsedLead[] = [];
+    const vistos = new Set<string>();
+    let duplicados = 0;
+    const reInvalido = /^(0+|9+|1+)$/;
+
+    for (const l of leadsDaCampanha) {
+      let norm: string | null = null;
+      try {
+        const r = normalizarTelefone(l.telefone);
+        if (r.validacao === "ok") norm = r.e164.replace(/\D/g, "");
+      } catch { /* ignore */ }
+
+      if (!norm || norm.length < 12 || norm.length > 13 || reInvalido.test(norm)) {
+        descartados.push({ nome: l.nome, telefone_raw: l.telefone, telefone_norm: norm, email: l.email, motivo_descarte: "Telefone inválido" });
+        continue;
+      }
+      if (vistos.has(norm)) { duplicados++; continue; }
+      vistos.add(norm);
+      validos.push({
+        nome: l.nome.split(" ").slice(0, 3).join(" "),
+        telefone_raw: l.telefone,
+        telefone_norm: norm,
+        email: l.email,
+        origem: "ofertativa:" + l.campanha,
+      });
+    }
+
+    const r: ParseResult = { total_brutos: leadsDaCampanha.length, validos, descartados, duplicados_arquivo: duplicados };
+    setParseRes(r);
+    if (validos.length > 0) {
+      const optout = await checarOptoutGlobal(validos.map(v => v.telefone_norm!).filter(Boolean));
+      setOptoutCruzados(optout);
+      setLeadsFinais(validos.filter(v => !optout.has(v.telefone_norm!)));
+    } else {
+      setLeadsFinais([]);
+    }
   };
 
   const gerarCopies = async () => {
@@ -234,31 +296,77 @@ export default function PlantaoNovo() {
           <Card>
             <CardHeader>
               <CardTitle>Base de leads</CardTitle>
-              <p className="text-sm text-muted-foreground">Cola CSV ou faz upload. Esperamos colunas: nome, telefone, email, origem, bitrix_lead_id</p>
+              <p className="text-sm text-muted-foreground">Puxa de campanha existente no Ofertativa ou sobe CSV</p>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="flex gap-2">
-                <input
-                  type="file"
-                  accept=".csv,.txt"
-                  onChange={e => e.target.files?.[0] && handleFileUpload(e.target.files[0])}
-                  className="hidden"
-                  id="csv-upload"
-                />
-                <Label htmlFor="csv-upload" className="cursor-pointer">
-                  <Button asChild variant="outline">
-                    <span><Upload className="mr-2 h-4 w-4" />Subir CSV</span>
-                  </Button>
-                </Label>
-                <span className="text-sm text-muted-foreground self-center">ou cola abaixo</span>
+              <div className="flex gap-2 border-b border-border">
+                <button
+                  className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${fonte === "campanha" ? "border-primary text-primary" : "border-transparent text-muted-foreground"}`}
+                  onClick={() => { setFonte("campanha"); setParseRes(null); setLeadsFinais([]); }}
+                >
+                  <Database className="inline mr-1 h-4 w-4" />
+                  Campanha Ofertativa
+                </button>
+                <button
+                  className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${fonte === "csv" ? "border-primary text-primary" : "border-transparent text-muted-foreground"}`}
+                  onClick={() => { setFonte("csv"); setParseRes(null); setLeadsFinais([]); setCampanhaSelecionada(""); }}
+                >
+                  <Upload className="inline mr-1 h-4 w-4" />
+                  CSV / Texto
+                </button>
               </div>
-              <Textarea
-                value={csvText}
-                onChange={e => processarCsv(e.target.value)}
-                rows={6}
-                placeholder="nome,telefone,email,origem&#10;João Silva,48999991234,joao@exemplo.com,instagram-ov"
-                className="font-mono text-xs"
-              />
+
+              {fonte === "campanha" && (
+                <div className="space-y-3">
+                  <Label>Escolha uma campanha já existente</Label>
+                  <select
+                    className="w-full border rounded-md px-3 py-2 bg-background"
+                    value={campanhaSelecionada}
+                    onChange={e => importarDeCampanha(e.target.value)}
+                  >
+                    <option value="">-- Selecione uma campanha --</option>
+                    {campanhas.map(c => {
+                      const total = leadsOfertativa.filter(l => l.campanhaId === c.id).length;
+                      return (
+                        <option key={c.id} value={c.id}>
+                          {c.nome} ({total} leads)
+                        </option>
+                      );
+                    })}
+                  </select>
+                  {campanhas.length === 0 && (
+                    <p className="text-xs text-muted-foreground">Nenhuma campanha cadastrada no Ofertativa. Use CSV ou cadastre em /campanhas primeiro.</p>
+                  )}
+                </div>
+              )}
+
+              {fonte === "csv" && (
+                <div className="space-y-3">
+                  <div className="flex gap-2">
+                    <input
+                      type="file"
+                      accept=".csv,.txt"
+                      onChange={e => e.target.files?.[0] && handleFileUpload(e.target.files[0])}
+                      className="hidden"
+                      id="csv-upload"
+                    />
+                    <Label htmlFor="csv-upload" className="cursor-pointer">
+                      <Button asChild variant="outline">
+                        <span><Upload className="mr-2 h-4 w-4" />Subir CSV</span>
+                      </Button>
+                    </Label>
+                    <span className="text-sm text-muted-foreground self-center">ou cola abaixo</span>
+                  </div>
+                  <Textarea
+                    value={csvText}
+                    onChange={e => processarCsv(e.target.value)}
+                    rows={6}
+                    placeholder="nome,telefone,email,origem&#10;João Silva,48999991234,joao@exemplo.com,instagram-ov"
+                    className="font-mono text-xs"
+                  />
+                </div>
+              )}
+
               {parseRes && (
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                   <Stat label="Brutos" value={parseRes.total_brutos} />
