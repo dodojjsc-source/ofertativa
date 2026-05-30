@@ -4,8 +4,19 @@ import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const ADMIN_TOKEN = Deno.env.get("ADMIN_API_TOKEN")!;
-const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY") || "";
-const GEMINI_MODEL = Deno.env.get("GEMINI_MODEL") || "gemini-2.5-flash";
+const GEMINI_KEYS = [
+  Deno.env.get("GEMINI_API_KEY") || "",
+  Deno.env.get("GEMINI_API_KEY_1") || "",
+  Deno.env.get("GEMINI_API_KEY_2") || "",
+  Deno.env.get("GEMINI_API_KEY_3") || "",
+].filter(k => k.length > 0);
+const GEMINI_API_KEY = GEMINI_KEYS[0] || "";
+const GEMINI_MODELS = [
+  Deno.env.get("GEMINI_MODEL") || "gemini-2.5-flash",
+  "gemini-2.0-flash",
+  "gemini-2.5-flash-lite",
+];
+const GEMINI_MODEL = GEMINI_MODELS[0];
 
 // ===== Helpers Plantão =====
 function normTel(t: string): string {
@@ -53,27 +64,42 @@ Classes:
 Retorne JSON: {"classificacao": "<classe>", "motivo": "<frase curta>", "score": <0 a 1>}`;
 
 async function geminiJson(systemPrompt: string, userPrompt: string, schema: any, temperature = 0.7) {
-  if (!GEMINI_API_KEY) throw new Error("GEMINI_API_KEY missing");
-  const resp = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        systemInstruction: { parts: [{ text: systemPrompt }] },
-        contents: [{ role: "user", parts: [{ text: userPrompt }] }],
-        generationConfig: {
-          temperature,
-          responseMimeType: "application/json",
-          responseSchema: schema,
-        },
-      }),
+  if (GEMINI_KEYS.length === 0) throw new Error("GEMINI_API_KEY missing");
+  const body = JSON.stringify({
+    systemInstruction: { parts: [{ text: systemPrompt }] },
+    contents: [{ role: "user", parts: [{ text: userPrompt }] }],
+    generationConfig: {
+      temperature,
+      responseMimeType: "application/json",
+      responseSchema: schema,
     },
-  );
-  if (!resp.ok) throw new Error("Gemini " + resp.status + ": " + (await resp.text()).slice(0, 300));
-  const data = await resp.json();
-  const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
-  return JSON.parse(text);
+  });
+  let lastErr = "no attempts";
+  for (const model of GEMINI_MODELS) {
+    for (const key of GEMINI_KEYS) {
+      try {
+        const resp = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`,
+          { method: "POST", headers: { "Content-Type": "application/json" }, body },
+        );
+        if (resp.ok) {
+          const data = await resp.json();
+          const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
+          return JSON.parse(text);
+        }
+        const errText = (await resp.text()).slice(0, 300);
+        lastErr = `${model}/${key.slice(-6)} HTTP ${resp.status}: ${errText}`;
+        // 429 (rate limit) ou 503 (overload): tenta próxima chave/modelo
+        if (resp.status === 429 || resp.status === 503) continue;
+        // 400 etc: erro determinístico, não adianta trocar
+        throw new Error(lastErr);
+      } catch (e: any) {
+        lastErr = `${model}/${key.slice(-6)} EXC: ${e.message || e}`;
+        continue;
+      }
+    }
+  }
+  throw new Error("Gemini todas tentativas falharam: " + lastErr);
 }
 
 async function classifyMsg(mensagem: string): Promise<{ classificacao: string; motivo: string; score: number }> {
