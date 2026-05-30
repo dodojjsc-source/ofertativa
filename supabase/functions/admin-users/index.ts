@@ -27,9 +27,21 @@ function normTel(t: string): string {
 }
 
 function dentroJanela(janelas: any[], now: Date): boolean {
-  const diaMap = ["dom", "seg", "ter", "qua", "qui", "sex", "sab"];
-  const dia = diaMap[now.getDay()];
-  const hhmm = now.toTimeString().slice(0, 5);
+  // Edge function roda em UTC. Converte pra America/Sao_Paulo (BRT, UTC-3).
+  const fmt = new Intl.DateTimeFormat("pt-BR", {
+    timeZone: "America/Sao_Paulo",
+    weekday: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+  const parts = fmt.formatToParts(now);
+  const wdRaw = (parts.find(p => p.type === "weekday")?.value || "").toLowerCase().slice(0, 3);
+  const map: Record<string, string> = { "dom": "dom", "seg": "seg", "ter": "ter", "qua": "qua", "qui": "qui", "sex": "sex", "sáb": "sab", "sab": "sab" };
+  const dia = map[wdRaw] || wdRaw;
+  const hh = parts.find(p => p.type === "hour")?.value || "00";
+  const mm = parts.find(p => p.type === "minute")?.value || "00";
+  const hhmm = `${hh}:${mm}`;
   for (const j of janelas || []) {
     if (j.dia === dia && hhmm >= j.inicio && hhmm <= j.fim) return true;
   }
