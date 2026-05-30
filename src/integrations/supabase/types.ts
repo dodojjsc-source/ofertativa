@@ -300,6 +300,368 @@ export type Database = {
         }
         Relationships: []
       }
+      disparo_copies: {
+        Row: {
+          ativa: boolean
+          created_at: string
+          id: string
+          inclui_eflyer: boolean
+          ordem: number
+          plantao_id: string
+          taxa_optout: number | null
+          taxa_resposta: number | null
+          texto: string
+          vezes_usada: number
+        }
+        Insert: {
+          ativa?: boolean
+          created_at?: string
+          id?: string
+          inclui_eflyer?: boolean
+          ordem: number
+          plantao_id: string
+          taxa_optout?: number | null
+          taxa_resposta?: number | null
+          texto: string
+          vezes_usada?: number
+        }
+        Update: {
+          ativa?: boolean
+          created_at?: string
+          id?: string
+          inclui_eflyer?: boolean
+          ordem?: number
+          plantao_id?: string
+          taxa_optout?: number | null
+          taxa_resposta?: number | null
+          texto?: string
+          vezes_usada?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "disparo_copies_plantao_id_fkey"
+            columns: ["plantao_id"]
+            isOneToOne: false
+            referencedRelation: "disparo_plantoes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      disparo_fila: {
+        Row: {
+          agendado_para: string | null
+          bitrix_lead_id: string | null
+          copy_id: string | null
+          created_at: string
+          email: string | null
+          enviado_em: string | null
+          evolution_msg_id: string | null
+          id: string
+          motivo_falha: string | null
+          nome: string
+          origem: string | null
+          plantao_id: string
+          status: Database["public"]["Enums"]["disparo_fila_status"]
+          telefone: string
+          telefone_norm: string
+          tentativas: number
+          updated_at: string
+        }
+        Insert: {
+          agendado_para?: string | null
+          bitrix_lead_id?: string | null
+          copy_id?: string | null
+          created_at?: string
+          email?: string | null
+          enviado_em?: string | null
+          evolution_msg_id?: string | null
+          id?: string
+          motivo_falha?: string | null
+          nome: string
+          origem?: string | null
+          plantao_id: string
+          status?: Database["public"]["Enums"]["disparo_fila_status"]
+          telefone: string
+          telefone_norm: string
+          tentativas?: number
+          updated_at?: string
+        }
+        Update: {
+          agendado_para?: string | null
+          bitrix_lead_id?: string | null
+          copy_id?: string | null
+          created_at?: string
+          email?: string | null
+          enviado_em?: string | null
+          evolution_msg_id?: string | null
+          id?: string
+          motivo_falha?: string | null
+          nome?: string
+          origem?: string | null
+          plantao_id?: string
+          status?: Database["public"]["Enums"]["disparo_fila_status"]
+          telefone?: string
+          telefone_norm?: string
+          tentativas?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "disparo_fila_copy_id_fkey"
+            columns: ["copy_id"]
+            isOneToOne: false
+            referencedRelation: "disparo_copies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "disparo_fila_plantao_id_fkey"
+            columns: ["plantao_id"]
+            isOneToOne: false
+            referencedRelation: "disparo_plantoes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      disparo_logs: {
+        Row: {
+          evento: Database["public"]["Enums"]["disparo_log_evento"]
+          evolution_msg_id: string | null
+          fila_id: string | null
+          id: string
+          plantao_id: string
+          raw_payload: Json | null
+          timestamp: string
+        }
+        Insert: {
+          evento: Database["public"]["Enums"]["disparo_log_evento"]
+          evolution_msg_id?: string | null
+          fila_id?: string | null
+          id?: string
+          plantao_id: string
+          raw_payload?: Json | null
+          timestamp?: string
+        }
+        Update: {
+          evento?: Database["public"]["Enums"]["disparo_log_evento"]
+          evolution_msg_id?: string | null
+          fila_id?: string | null
+          id?: string
+          plantao_id?: string
+          raw_payload?: Json | null
+          timestamp?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "disparo_logs_fila_id_fkey"
+            columns: ["fila_id"]
+            isOneToOne: false
+            referencedRelation: "disparo_fila"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "disparo_logs_plantao_id_fkey"
+            columns: ["plantao_id"]
+            isOneToOne: false
+            referencedRelation: "disparo_plantoes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      disparo_plantoes: {
+        Row: {
+          bitrix_funil_id: string | null
+          chip_instance: string
+          concluido_em: string | null
+          corretores_handoff: string[]
+          created_at: string
+          created_by: string | null
+          descricao: string | null
+          eflyer_url: string | null
+          id: string
+          iniciado_em: string | null
+          janelas: Json
+          modo_handoff: string
+          nome: string
+          pausado_em: string | null
+          pilares: Json
+          ritmo_max_seg: number
+          ritmo_min_seg: number
+          status: Database["public"]["Enums"]["plantao_status"]
+          total_entregues: number
+          total_enviados: number
+          total_falhas: number
+          total_leads: number
+          total_lidos: number
+          total_optout: number
+          total_respostas: number
+          updated_at: string
+          video_url: string | null
+          volume_max_dia: number
+        }
+        Insert: {
+          bitrix_funil_id?: string | null
+          chip_instance: string
+          concluido_em?: string | null
+          corretores_handoff?: string[]
+          created_at?: string
+          created_by?: string | null
+          descricao?: string | null
+          eflyer_url?: string | null
+          id?: string
+          iniciado_em?: string | null
+          janelas?: Json
+          modo_handoff?: string
+          nome: string
+          pausado_em?: string | null
+          pilares?: Json
+          ritmo_max_seg?: number
+          ritmo_min_seg?: number
+          status?: Database["public"]["Enums"]["plantao_status"]
+          total_entregues?: number
+          total_enviados?: number
+          total_falhas?: number
+          total_leads?: number
+          total_lidos?: number
+          total_optout?: number
+          total_respostas?: number
+          updated_at?: string
+          video_url?: string | null
+          volume_max_dia?: number
+        }
+        Update: {
+          bitrix_funil_id?: string | null
+          chip_instance?: string
+          concluido_em?: string | null
+          corretores_handoff?: string[]
+          created_at?: string
+          created_by?: string | null
+          descricao?: string | null
+          eflyer_url?: string | null
+          id?: string
+          iniciado_em?: string | null
+          janelas?: Json
+          modo_handoff?: string
+          nome?: string
+          pausado_em?: string | null
+          pilares?: Json
+          ritmo_max_seg?: number
+          ritmo_min_seg?: number
+          status?: Database["public"]["Enums"]["plantao_status"]
+          total_entregues?: number
+          total_enviados?: number
+          total_falhas?: number
+          total_leads?: number
+          total_lidos?: number
+          total_optout?: number
+          total_respostas?: number
+          updated_at?: string
+          video_url?: string | null
+          volume_max_dia?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "disparo_plantoes_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      disparo_respostas: {
+        Row: {
+          bitrix_lead_id: string | null
+          classificacao: Database["public"]["Enums"]["resposta_classificacao"]
+          classificacao_manual: boolean
+          classificacao_motivo: string | null
+          classificacao_score: number | null
+          created_at: string
+          fila_id: string | null
+          handoff_status: Database["public"]["Enums"]["handoff_status"]
+          id: string
+          mensagem: string
+          nome: string | null
+          observacao: string | null
+          pego_em: string | null
+          pego_por: string | null
+          plantao_id: string
+          raw_payload: Json | null
+          recebido_em: string
+          telefone: string
+          telefone_norm: string
+          travado_ate: string | null
+          updated_at: string
+        }
+        Insert: {
+          bitrix_lead_id?: string | null
+          classificacao?: Database["public"]["Enums"]["resposta_classificacao"]
+          classificacao_manual?: boolean
+          classificacao_motivo?: string | null
+          classificacao_score?: number | null
+          created_at?: string
+          fila_id?: string | null
+          handoff_status?: Database["public"]["Enums"]["handoff_status"]
+          id?: string
+          mensagem: string
+          nome?: string | null
+          observacao?: string | null
+          pego_em?: string | null
+          pego_por?: string | null
+          plantao_id: string
+          raw_payload?: Json | null
+          recebido_em?: string
+          telefone: string
+          telefone_norm: string
+          travado_ate?: string | null
+          updated_at?: string
+        }
+        Update: {
+          bitrix_lead_id?: string | null
+          classificacao?: Database["public"]["Enums"]["resposta_classificacao"]
+          classificacao_manual?: boolean
+          classificacao_motivo?: string | null
+          classificacao_score?: number | null
+          created_at?: string
+          fila_id?: string | null
+          handoff_status?: Database["public"]["Enums"]["handoff_status"]
+          id?: string
+          mensagem?: string
+          nome?: string | null
+          observacao?: string | null
+          pego_em?: string | null
+          pego_por?: string | null
+          plantao_id?: string
+          raw_payload?: Json | null
+          recebido_em?: string
+          telefone?: string
+          telefone_norm?: string
+          travado_ate?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "disparo_respostas_fila_id_fkey"
+            columns: ["fila_id"]
+            isOneToOne: false
+            referencedRelation: "disparo_fila"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "disparo_respostas_pego_por_fkey"
+            columns: ["pego_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "disparo_respostas_plantao_id_fkey"
+            columns: ["plantao_id"]
+            isOneToOne: false
+            referencedRelation: "disparo_plantoes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       jobs_telefone_normalizacao: {
         Row: {
           amostra_issues_json: Json | null
@@ -684,6 +1046,10 @@ export type Database = {
     }
     Functions: {
       get_user_gestor_id: { Args: { _user_id: string }; Returns: string }
+      handoff_pegar: {
+        Args: { _corretor_id: string; _lock_min?: number; _resposta_id: string }
+        Returns: boolean
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -691,11 +1057,23 @@ export type Database = {
         }
         Returns: boolean
       }
+      norm_telefone_br: { Args: { _tel: string }; Returns: string }
+      recalc_plantao_stats: {
+        Args: { _plantao_id: string }
+        Returns: undefined
+      }
     }
     Enums: {
       app_role: "admin" | "gestor" | "corretor"
       assignment_status: "pendente" | "concluido"
       bitrix_status: "pendente" | "processado" | "erro" | "descartado"
+      disparo_fila_status:
+        | "aguardando"
+        | "enviado"
+        | "falhou"
+        | "optout_pre"
+        | "cancelado"
+      disparo_log_evento: "enviado" | "entregue" | "lido" | "falha"
       feedback_type:
         | "interessado"
         | "agendado"
@@ -703,7 +1081,25 @@ export type Database = {
         | "optout"
         | "numero_errado"
         | "nao_atendeu"
+      handoff_status:
+        | "aguardando"
+        | "em_atendimento"
+        | "concluido"
+        | "descartado"
       lead_status: "pendente" | "atendido" | "nao_atendido"
+      plantao_status:
+        | "rascunho"
+        | "aprovado"
+        | "ativo"
+        | "pausado"
+        | "concluido"
+        | "cancelado"
+      resposta_classificacao:
+        | "interessado"
+        | "frio"
+        | "optout"
+        | "outro"
+        | "pendente"
       user_status: "ativo" | "inativo"
     }
     CompositeTypes: {
@@ -835,6 +1231,14 @@ export const Constants = {
       app_role: ["admin", "gestor", "corretor"],
       assignment_status: ["pendente", "concluido"],
       bitrix_status: ["pendente", "processado", "erro", "descartado"],
+      disparo_fila_status: [
+        "aguardando",
+        "enviado",
+        "falhou",
+        "optout_pre",
+        "cancelado",
+      ],
+      disparo_log_evento: ["enviado", "entregue", "lido", "falha"],
       feedback_type: [
         "interessado",
         "agendado",
@@ -843,7 +1247,28 @@ export const Constants = {
         "numero_errado",
         "nao_atendeu",
       ],
+      handoff_status: [
+        "aguardando",
+        "em_atendimento",
+        "concluido",
+        "descartado",
+      ],
       lead_status: ["pendente", "atendido", "nao_atendido"],
+      plantao_status: [
+        "rascunho",
+        "aprovado",
+        "ativo",
+        "pausado",
+        "concluido",
+        "cancelado",
+      ],
+      resposta_classificacao: [
+        "interessado",
+        "frio",
+        "optout",
+        "outro",
+        "pendente",
+      ],
       user_status: ["ativo", "inativo"],
     },
   },
