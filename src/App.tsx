@@ -33,6 +33,9 @@ import FixPhoneNumbers from "./pages/FixPhoneNumbers";
 import AcceptInvite from "./pages/AcceptInvite";
 import ResetPassword from "./pages/ResetPassword";
 import NotFound from "./pages/NotFound";
+import PlantaoLista from "./pages/Plantao";
+import PlantaoNovo from "./pages/PlantaoNovo";
+import PlantaoDetalhe from "./pages/PlantaoDetalhe";
 
 const queryClient = new QueryClient();
 
@@ -173,6 +176,30 @@ const App = () => (
                         element={
                           <ProtectedRoute allowedRoles={["admin"]}>
                             <FixPhoneNumbers />
+                          </ProtectedRoute>
+                        }
+                      />
+                      <Route
+                        path="/plantao"
+                        element={
+                          <ProtectedRoute allowedRoles={["admin"]}>
+                            <PlantaoLista />
+                          </ProtectedRoute>
+                        }
+                      />
+                      <Route
+                        path="/plantao/novo"
+                        element={
+                          <ProtectedRoute allowedRoles={["admin"]}>
+                            <PlantaoNovo />
+                          </ProtectedRoute>
+                        }
+                      />
+                      <Route
+                        path="/plantao/:id"
+                        element={
+                          <ProtectedRoute allowedRoles={["admin"]}>
+                            <PlantaoDetalhe />
                           </ProtectedRoute>
                         }
                       />

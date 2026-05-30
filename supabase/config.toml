@@ -14,3 +14,9 @@ verify_jwt = true
 
 [functions.admin-users]
 verify_jwt = false
+
+[functions.generate-copies]
+verify_jwt = true
+
+[functions.plantao-worker-api]
+verify_jwt = false
