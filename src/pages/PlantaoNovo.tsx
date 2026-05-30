@@ -85,15 +85,27 @@ export default function PlantaoNovo() {
   const gerarCopies = async () => {
     setGerandoCopies(true);
     try {
-      const { data, error } = await supabase.functions.invoke("generate-copies", {
-        body: {
-          nome_oferta: nome,
-          pilares: pilares.filter(p => p.trim()),
-          eflyer_url: eflyerUrl,
-          quantidade: 5,
+      const ADMIN_TOKEN = "BzOferta!2026_xK9pQ";
+      const resp = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-users/plantao-generate-copies`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-admin-token": ADMIN_TOKEN,
+            "Authorization": `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+            "apikey": import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+          },
+          body: JSON.stringify({
+            nome_oferta: nome,
+            pilares: pilares.filter(p => p.trim()),
+            eflyer_url: eflyerUrl,
+            quantidade: 5,
+          }),
         },
-      });
-      if (error) throw error;
+      );
+      const data = await resp.json();
+      if (!resp.ok || data.error) throw new Error(data.error || `HTTP ${resp.status}`);
       const cps = (data?.copies || []) as string[];
       setCopies(cps.map(t => ({ texto: t, ativa: true })));
       toast({ title: "5 copies geradas", description: "Revise, edite e ative as que quiser usar" });
