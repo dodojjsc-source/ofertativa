@@ -172,13 +172,22 @@ export function LeadsProvider({ children }: { children: ReactNode }) {
       // Normalizar telefones + nomes primeiro
       const normalizedLeads = newLeads.map(lead => {
         const result = normalizarTelefone(lead.telefone);
-        // Limpa nome: remove sufixo "Canal Aberto Whatsapp X" + prefixo telefone + tabs
-        const nomeClean = (lead.nome || "")
+        // Limpa nome: WA:, sufixos [NIA] Recepção, Gestão ADM, Canal Aberto, prefixo telefone, CAIXA ALTA, tabs
+        let nomeClean = (lead.nome || "")
           .replace(/[\t\r\n]+/g, " ")
           .trim()
+          .replace(/^WA:?\s+/i, "")
+          .replace(/\s*[-–—]?\s*\[NIA\]\s*Recepção\s*$/i, "")
+          .replace(/\s*[-–—]?\s*Recepção\s*$/i, "")
+          .replace(/\s*[-–—]?\s*Gestão\s*ADM\s*$/i, "")
           .replace(/\s*[-–—]\s*Canal Aberto.*$/i, "")
           .replace(/^\+?5?\d{8,}\s*[-–—]?\s*/, "")
+          .replace(/\s+/g, " ")
           .trim();
+        // CAIXA ALTA inteira (>4 chars) → Title Case
+        if (/^[A-ZÁÀÂÃÉÊÍÓÔÕÚÇ\s]{4,}$/.test(nomeClean)) {
+          nomeClean = nomeClean.toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
+        }
         const isInvalido = nomeClean.length < 2 || /^\d+$/.test(nomeClean) || /^[âãÃÂºº·\s]+$/.test(nomeClean);
         return {
           ...lead,
