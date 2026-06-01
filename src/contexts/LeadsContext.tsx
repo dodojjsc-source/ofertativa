@@ -188,7 +188,12 @@ export function LeadsProvider({ children }: { children: ReactNode }) {
         if (/^[A-ZÁÀÂÃÉÊÍÓÔÕÚÇ\s]{4,}$/.test(nomeClean)) {
           nomeClean = nomeClean.toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
         }
-        const isInvalido = nomeClean.length < 2 || /^\d+$/.test(nomeClean) || /^[âãÃÂºº·\s]+$/.test(nomeClean);
+        const isInvalido = nomeClean.length < 2
+          || /^\d+$/.test(nomeClean)
+          || /^[âãÃÂºº·\s]+$/.test(nomeClean)
+          || /^Lead\s*#?\s*\d+$/i.test(nomeClean)
+          || /^Cliente\s*#?\s*\d+$/i.test(nomeClean)
+          || /^Contato\s*#?\s*\d+$/i.test(nomeClean);
         return {
           ...lead,
           nome: isInvalido ? "" : nomeClean,
