@@ -169,11 +169,20 @@ export function LeadsProvider({ children }: { children: ReactNode }) {
 
   const addLeads = async (newLeads: Omit<Lead, "id">[]) => {
     try {
-      // Normalizar telefones primeiro
+      // Normalizar telefones + nomes primeiro
       const normalizedLeads = newLeads.map(lead => {
         const result = normalizarTelefone(lead.telefone);
+        // Limpa nome: remove sufixo "Canal Aberto Whatsapp X" + prefixo telefone + tabs
+        const nomeClean = (lead.nome || "")
+          .replace(/[\t\r\n]+/g, " ")
+          .trim()
+          .replace(/\s*[-–—]\s*Canal Aberto.*$/i, "")
+          .replace(/^\+?5?\d{8,}\s*[-–—]?\s*/, "")
+          .trim();
+        const isInvalido = nomeClean.length < 2 || /^\d+$/.test(nomeClean) || /^[âãÃÂºº·\s]+$/.test(nomeClean);
         return {
           ...lead,
+          nome: isInvalido ? "" : nomeClean,
           telefone_raw: lead.telefone,
           telefone: result.display_local || lead.telefone,
           ddi: result.ddi,
