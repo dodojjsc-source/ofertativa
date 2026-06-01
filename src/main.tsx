@@ -1,5 +1,6 @@
 import { createRoot } from "react-dom/client";
 import "./index.css";
+import App from "./App.tsx";
 
 if (
   window.location.pathname === "/reset-password" &&
@@ -11,6 +12,4 @@ if (
   );
 }
 
-import("./App.tsx").then(({ default: App }) => {
-  createRoot(document.getElementById("root")!).render(<App />);
-});
+createRoot(document.getElementById("root")!).render(<App />);

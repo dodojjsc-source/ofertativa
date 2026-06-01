@@ -12,6 +12,7 @@ import { BitrixQueueProvider } from "@/contexts/BitrixQueueContext";
 import { AssignmentsProvider } from "@/contexts/AssignmentsContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { PWAPrompt } from "@/components/PWAPrompt";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import Login from "./pages/Login";
@@ -40,6 +41,7 @@ import PlantaoDetalhe from "./pages/PlantaoDetalhe";
 const queryClient = new QueryClient();
 
 const App = () => (
+  <ErrorBoundary>
   <QueryClientProvider client={queryClient}>
     <AuthProvider>
       <UsersProvider>
@@ -215,6 +217,7 @@ const App = () => (
       </UsersProvider>
     </AuthProvider>
   </QueryClientProvider>
+  </ErrorBoundary>
 );
 
 export default App;
