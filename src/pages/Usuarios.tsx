@@ -12,11 +12,13 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useUsers, AppUser } from "@/contexts/UsersContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { UserDialog } from "@/components/UserDialog";
 import { InvitationDialog } from "@/components/InvitationDialog";
 import { ImportarBitrixDialog } from "@/components/ImportarBitrixDialog";
+import { ResetPasswordDialog } from "@/components/ResetPasswordDialog";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Plus, Pencil, Trash2, Search, Mail, ChevronDown } from "lucide-react";
+import { Plus, Pencil, Trash2, Search, Mail, ChevronDown, KeyRound } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "@/hooks/use-toast";
 import {
@@ -32,12 +34,16 @@ import {
 
 export default function Usuarios() {
   const { users, deleteUser, getUserById, getCorretoresByGestor, canDeleteUser } = useUsers();
+  const { user: currentUser } = useAuth();
+  const isAdmin = currentUser?.role === "admin";
   const [search, setSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [inviteDialogOpen, setInviteDialogOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<AppUser | undefined>();
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [userToDelete, setUserToDelete] = useState<string | null>(null);
+  const [resetPasswordDialogOpen, setResetPasswordDialogOpen] = useState(false);
+  const [userToResetPassword, setUserToResetPassword] = useState<AppUser | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkDialogOpen, setBulkDialogOpen] = useState(false);
   const [bulkProcessing, setBulkProcessing] = useState(false);
@@ -345,13 +351,28 @@ export default function Usuarios() {
                               variant="ghost"
                               size="sm"
                               onClick={() => handleEdit(user)}
+                              title="Editar"
                             >
                               <Pencil className="h-4 w-4" />
                             </Button>
+                            {isAdmin && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => {
+                                  setUserToResetPassword(user);
+                                  setResetPasswordDialogOpen(true);
+                                }}
+                                title="Redefinir senha"
+                              >
+                                <KeyRound className="h-4 w-4" />
+                              </Button>
+                            )}
                             <Button
                               variant="ghost"
                               size="sm"
                               onClick={() => handleDelete(user.id)}
+                              title="Excluir"
                             >
                               <Trash2 className="h-4 w-4" />
                             </Button>
@@ -382,6 +403,15 @@ export default function Usuarios() {
       <ImportarBitrixDialog
         open={importBitrixOpen}
         onOpenChange={setImportBitrixOpen}
+      />
+
+      <ResetPasswordDialog
+        open={resetPasswordDialogOpen}
+        onOpenChange={(open) => {
+          setResetPasswordDialogOpen(open);
+          if (!open) setUserToResetPassword(null);
+        }}
+        user={userToResetPassword}
       />
 
       <AlertDialog open={bulkDialogOpen} onOpenChange={(o) => !bulkProcessing && setBulkDialogOpen(o)}>
