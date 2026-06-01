@@ -27,33 +27,44 @@ export default function PlantaoDetalhe() {
 
   const load = useCallback(async () => {
     if (!id) return;
-    // Constrói query da fila paginada com filtros
-    let filaQuery = (supabase as any)
-      .from("disparo_fila")
-      .select("*", { count: "exact" })
-      .eq("plantao_id", id);
-    if (filaStatus !== "todos") filaQuery = filaQuery.eq("status", filaStatus);
-    if (filaSearch.trim()) filaQuery = filaQuery.or(`nome.ilike.%${filaSearch}%,telefone.ilike.%${filaSearch}%,telefone_norm.ilike.%${filaSearch}%`);
-    filaQuery = filaQuery
-      .order("updated_at", { ascending: false })
-      .range(filaPage * PAGE_SIZE, filaPage * PAGE_SIZE + PAGE_SIZE - 1);
+    try {
+      // Constrói query da fila paginada com filtros
+      let filaQuery = (supabase as any)
+        .from("disparo_fila")
+        .select("*", { count: "exact" })
+        .eq("plantao_id", id);
+      if (filaStatus !== "todos") filaQuery = filaQuery.eq("status", filaStatus);
+      const s = filaSearch.trim();
+      if (s) {
+        // Escapa vírgula que quebra .or() do PostgREST
+        const safe = s.replace(/,/g, "");
+        filaQuery = filaQuery.or(`nome.ilike.%${safe}%,telefone.ilike.%${safe}%,telefone_norm.ilike.%${safe}%`);
+      }
+      filaQuery = filaQuery
+        .order("updated_at", { ascending: false })
+        .range(filaPage * PAGE_SIZE, filaPage * PAGE_SIZE + PAGE_SIZE - 1);
 
-    const [p, c, fc, fs, r] = await Promise.all([
-      (supabase as any).from("disparo_plantoes").select("*").eq("id", id).single(),
-      (supabase as any).from("disparo_copies").select("*").eq("plantao_id", id).order("ordem"),
-      (supabase as any).from("disparo_fila").select("status").eq("plantao_id", id),
-      filaQuery,
-      (supabase as any).from("disparo_respostas").select("*").eq("plantao_id", id).order("recebido_em", { ascending: false }).limit(50),
-    ]);
-    if (p.data) setPlantao(p.data as Plantao);
-    setCopies((c.data || []) as PlantaoCopy[]);
-    setFilaSample((fs.data || []) as DisparoFila[]);
-    setFilaTotal(fs.count || 0);
-    setRespostas((r.data || []) as DisparoResposta[]);
-    const cnt = { aguardando: 0, enviado: 0, falhou: 0 } as any;
-    (fc.data || []).forEach((row: any) => { cnt[row.status] = (cnt[row.status] || 0) + 1; });
-    setFilaCount(cnt);
-    setLoading(false);
+      const [p, c, fc, fs, r] = await Promise.all([
+        (supabase as any).from("disparo_plantoes").select("*").eq("id", id).single(),
+        (supabase as any).from("disparo_copies").select("*").eq("plantao_id", id).order("ordem"),
+        (supabase as any).from("disparo_fila").select("status").eq("plantao_id", id),
+        filaQuery,
+        (supabase as any).from("disparo_respostas").select("*").eq("plantao_id", id).order("recebido_em", { ascending: false }).limit(50),
+      ]);
+      if (p?.data) setPlantao(p.data as Plantao);
+      setCopies((c?.data || []) as PlantaoCopy[]);
+      setFilaSample((fs?.data || []) as DisparoFila[]);
+      setFilaTotal(fs?.count || 0);
+      setRespostas((r?.data || []) as DisparoResposta[]);
+      const cnt = { aguardando: 0, enviado: 0, falhou: 0 } as any;
+      (fc?.data || []).forEach((row: any) => { cnt[row.status] = (cnt[row.status] || 0) + 1; });
+      setFilaCount(cnt);
+    } catch (e: any) {
+      console.error("[plantao] erro ao carregar:", e);
+      toast({ title: "Erro ao carregar plantão", description: e?.message || "Erro desconhecido", variant: "destructive" });
+    } finally {
+      setLoading(false);
+    }
   }, [id, filaPage, filaStatus, filaSearch]);
 
   useEffect(() => {
