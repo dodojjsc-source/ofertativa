@@ -586,6 +586,86 @@ Retorne JSON com array "copies" (5 variações estruturalmente diferentes).`;
         return json({ ok: true, inseridos: data?.length });
       }
 
+      case "plantao-analisa-campanha": {
+        // Analisa qualidade dos nomes/telefones de uma campanha Ofertativa
+        // Input: { campanha_nome | campanha_id }
+        const { campanha_nome, campanha_id } = body;
+        let camp: any = null;
+        if (campanha_id) {
+          const { data } = await admin.from("campanhas").select("*").eq("id", campanha_id).single();
+          camp = data;
+        } else if (campanha_nome) {
+          const { data } = await admin.from("campanhas").select("*").ilike("nome", `%${campanha_nome}%`).limit(1);
+          camp = data?.[0];
+        }
+        if (!camp) return json({ error: "campanha não encontrada" }, 404);
+
+        const { data: leads } = await admin.from("leads").select("id, nome, telefone").eq("campanha_id", camp.id);
+        const total = leads?.length || 0;
+
+        // Padrões problemáticos
+        const padroes = [
+          { nome: "Prefixo WA", regex: /^\s*(WA|wa|Wa|W\.A\.?)\s+/i, exemplos: [] as string[] },
+          { nome: "Sufixo Canal Aberto", regex: /\b(canal\s*aberto|c\.?a\.?)\s*$/i, exemplos: [] as string[] },
+          { nome: "Prefixo Equipe", regex: /^\s*(equipe|time)\s+/i, exemplos: [] as string[] },
+          { nome: "Prefixo Lead", regex: /^\s*(lead|leads)\s+/i, exemplos: [] as string[] },
+          { nome: "Hashtag #", regex: /#\w+/, exemplos: [] as string[] },
+          { nome: "Contém Bot/Auto", regex: /\b(bot|auto|automa)/i, exemplos: [] as string[] },
+          { nome: "Email no nome", regex: /@\w+\./, exemplos: [] as string[] },
+          { nome: "URL no nome", regex: /https?:\/\//, exemplos: [] as string[] },
+          { nome: "Telefone no nome", regex: /\d{8,}/, exemplos: [] as string[] },
+          { nome: "Só números", regex: /^\d+$/, exemplos: [] as string[] },
+          { nome: "1 palavra só", regex: /^\S+$/, exemplos: [] as string[] },
+          { nome: "CAIXA ALTA inteira", regex: /^[A-ZÁÀÂÃÉÊÍÓÔÕÚÇ\s]+$/, exemplos: [] as string[] },
+          { nome: "Tamanho < 3", regex: /^.{1,2}$/, exemplos: [] as string[] },
+          { nome: "Tamanho > 50", regex: /^.{51,}$/, exemplos: [] as string[] },
+          { nome: "Caractere especial", regex: /[\(\)\[\]\{\}<>\\\|]/, exemplos: [] as string[] },
+        ];
+
+        let semNome = 0;
+        let semTelefone = 0;
+        let telefoneInvalido = 0;
+        const telefonesUnicos = new Set<string>();
+        let duplicados = 0;
+
+        for (const l of leads || []) {
+          const nome = String(l.nome || "").trim();
+          const tel = String(l.telefone || "").trim();
+
+          if (!nome) { semNome++; continue; }
+          if (!tel) { semTelefone++; continue; }
+
+          // Telefone normalizado
+          let d = tel.replace(/\D/g, "");
+          if (d.length === 10 || d.length === 11) d = "55" + d;
+          if (d.length === 12) d = d.slice(0, 4) + "9" + d.slice(4);
+          if (d.length < 12 || d.length > 13) telefoneInvalido++;
+          else {
+            if (telefonesUnicos.has(d)) duplicados++;
+            else telefonesUnicos.add(d);
+          }
+
+          for (const p of padroes) {
+            if (p.regex.test(nome) && p.exemplos.length < 5) p.exemplos.push(nome);
+          }
+        }
+
+        return json({
+          campanha: { id: camp.id, nome: camp.nome },
+          total_leads: total,
+          sem_nome: semNome,
+          sem_telefone: semTelefone,
+          telefone_invalido: telefoneInvalido,
+          duplicados,
+          unicos_validos: telefonesUnicos.size,
+          padroes_problematicos: padroes.filter(p => p.exemplos.length > 0).map(p => ({
+            tipo: p.nome,
+            qtd: p.exemplos.length,
+            exemplos: p.exemplos,
+          })),
+        });
+      }
+
       case "plantao-recalc-stats": {
         const { plantao_id } = body;
         if (!plantao_id) return json({ error: "plantao_id required" }, 400);
