@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useUsers, AppUser } from "@/contexts/UsersContext";
 import { useAuth } from "@/contexts/AuthContext";
+import { useLeads } from "@/contexts/LeadsContext";
 import { UserDialog } from "@/components/UserDialog";
 import { InvitationDialog } from "@/components/InvitationDialog";
 import { ImportarBitrixDialog } from "@/components/ImportarBitrixDialog";
@@ -35,6 +36,7 @@ import {
 export default function Usuarios() {
   const { users, deleteUser, getUserById, getCorretoresByGestor, canDeleteUser } = useUsers();
   const { user: currentUser } = useAuth();
+  const { leads } = useLeads();
   const isAdmin = currentUser?.role === "admin";
   const [search, setSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -309,6 +311,8 @@ export default function Usuarios() {
                   <TableHead>Perfil</TableHead>
                   <TableHead>Gestor</TableHead>
                   <TableHead>Corretores</TableHead>
+                  <TableHead>Leads atrib.</TableHead>
+                  <TableHead>Atendimentos</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="text-right">Ações</TableHead>
                 </TableRow>
@@ -316,7 +320,7 @@ export default function Usuarios() {
               <TableBody>
                 {filteredUsers.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={9} className="text-center text-muted-foreground">
+                    <TableCell colSpan={11} className="text-center text-muted-foreground">
                       Nenhum usuário encontrado
                     </TableCell>
                   </TableRow>
@@ -324,6 +328,9 @@ export default function Usuarios() {
                   filteredUsers.map((user) => {
                     const gestor = user.gestorId ? getUserById(user.gestorId) : null;
                     const corretoresCount = user.role === "gestor" ? getCorretoresByGestor(user.id).length : 0;
+                    const isCorretor = user.role === "corretor";
+                    const leadsAtribuidos = isCorretor ? leads.filter(l => l.corretorId === user.id).length : 0;
+                    const atendimentos = isCorretor ? leads.filter(l => l.corretorId === user.id && l.status === "atendido").length : 0;
 
                     return (
                       <TableRow key={user.id} data-state={selectedIds.has(user.id) ? "selected" : undefined}>
@@ -342,6 +349,18 @@ export default function Usuarios() {
                         <TableCell>
                           {user.role === "gestor" ? (
                             <Badge variant="outline">{corretoresCount}</Badge>
+                          ) : "-"}
+                        </TableCell>
+                        <TableCell>
+                          {isCorretor ? (
+                            <Badge variant="outline">{leadsAtribuidos}</Badge>
+                          ) : "-"}
+                        </TableCell>
+                        <TableCell>
+                          {isCorretor ? (
+                            <Badge variant="outline" className={atendimentos > 0 ? "bg-green-50 text-green-700 border-green-200" : ""}>
+                              {atendimentos}
+                            </Badge>
                           ) : "-"}
                         </TableCell>
                         <TableCell>{getStatusBadge(user.status)}</TableCell>
