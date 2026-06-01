@@ -17,44 +17,27 @@ export default function PlantaoDetalhe() {
   const [plantao, setPlantao] = useState<Plantao | null>(null);
   const [copies, setCopies] = useState<PlantaoCopy[]>([]);
   const [filaSample, setFilaSample] = useState<DisparoFila[]>([]);
-  const [filaTotal, setFilaTotal] = useState(0);
-  const [filaPage, setFilaPage] = useState(0);
-  const [filaStatus, setFilaStatus] = useState<string>("todos");
-  const [filaSearch, setFilaSearch] = useState("");
-  const PAGE_SIZE = 50;
   const [respostas, setRespostas] = useState<DisparoResposta[]>([]);
   const [filaCount, setFilaCount] = useState({ aguardando: 0, enviado: 0, falhou: 0 });
 
   const load = useCallback(async () => {
     if (!id) return;
-    // Constrói query da fila paginada com filtros
-    let filaQuery = (supabase as any)
-      .from("disparo_fila")
-      .select("*", { count: "exact" })
-      .eq("plantao_id", id);
-    if (filaStatus !== "todos") filaQuery = filaQuery.eq("status", filaStatus);
-    if (filaSearch.trim()) filaQuery = filaQuery.or(`nome.ilike.%${filaSearch}%,telefone.ilike.%${filaSearch}%,telefone_norm.ilike.%${filaSearch}%`);
-    filaQuery = filaQuery
-      .order("updated_at", { ascending: false })
-      .range(filaPage * PAGE_SIZE, filaPage * PAGE_SIZE + PAGE_SIZE - 1);
-
     const [p, c, fc, fs, r] = await Promise.all([
       (supabase as any).from("disparo_plantoes").select("*").eq("id", id).single(),
       (supabase as any).from("disparo_copies").select("*").eq("plantao_id", id).order("ordem"),
       (supabase as any).from("disparo_fila").select("status").eq("plantao_id", id),
-      filaQuery,
+      (supabase as any).from("disparo_fila").select("*").eq("plantao_id", id).order("updated_at", { ascending: false }).limit(30),
       (supabase as any).from("disparo_respostas").select("*").eq("plantao_id", id).order("recebido_em", { ascending: false }).limit(50),
     ]);
     if (p.data) setPlantao(p.data as Plantao);
     setCopies((c.data || []) as PlantaoCopy[]);
     setFilaSample((fs.data || []) as DisparoFila[]);
-    setFilaTotal(fs.count || 0);
     setRespostas((r.data || []) as DisparoResposta[]);
     const cnt = { aguardando: 0, enviado: 0, falhou: 0 } as any;
     (fc.data || []).forEach((row: any) => { cnt[row.status] = (cnt[row.status] || 0) + 1; });
     setFilaCount(cnt);
     setLoading(false);
-  }, [id, filaPage, filaStatus, filaSearch]);
+  }, [id]);
 
   useEffect(() => {
     load();
@@ -176,18 +159,7 @@ export default function PlantaoDetalhe() {
           </TabsContent>
 
           <TabsContent value="fila">
-            <FilaView
-              fila={filaSample}
-              filaCount={filaCount}
-              total={filaTotal}
-              page={filaPage}
-              pageSize={PAGE_SIZE}
-              onPageChange={setFilaPage}
-              statusFilter={filaStatus}
-              onStatusChange={(s) => { setFilaStatus(s); setFilaPage(0); }}
-              search={filaSearch}
-              onSearchChange={(s) => { setFilaSearch(s); setFilaPage(0); }}
-            />
+            <FilaView fila={filaSample} filaCount={filaCount} />
           </TabsContent>
 
           <TabsContent value="config">
@@ -323,103 +295,33 @@ function CopiesView({ copies }: { copies: PlantaoCopy[] }) {
   );
 }
 
-function FilaView({
-  fila, filaCount, total, page, pageSize, onPageChange,
-  statusFilter, onStatusChange, search, onSearchChange,
-}: {
-  fila: DisparoFila[]; filaCount: any; total: number; page: number; pageSize: number;
-  onPageChange: (p: number) => void;
-  statusFilter: string; onStatusChange: (s: string) => void;
-  search: string; onSearchChange: (s: string) => void;
-}) {
-  const totalPages = Math.max(1, Math.ceil(total / pageSize));
-  const from = total === 0 ? 0 : page * pageSize + 1;
-  const to = Math.min(total, (page + 1) * pageSize);
-
-  const STATUS_OPCOES = [
-    { v: "todos", label: `Todos (${filaCount.aguardando + filaCount.enviado + filaCount.falhou})` },
-    { v: "aguardando", label: `Aguardando (${filaCount.aguardando})` },
-    { v: "enviado", label: `Enviado (${filaCount.enviado})` },
-    { v: "falhou", label: `Falhou (${filaCount.falhou})` },
-  ];
-
+function FilaView({ fila, filaCount }: { fila: DisparoFila[]; filaCount: any }) {
   return (
     <Card>
-      <CardHeader className="space-y-3">
-        <CardTitle className="text-sm flex gap-4 flex-wrap">
+      <CardHeader>
+        <CardTitle className="text-sm flex gap-4">
           <span>Aguardando: {filaCount.aguardando}</span>
-          <span className="text-blue-600">Enviado: {filaCount.enviado}</span>
+          <span>Enviado: {filaCount.enviado}</span>
           <span className="text-red-600">Falhou: {filaCount.falhou}</span>
         </CardTitle>
-        <div className="flex gap-2 flex-wrap items-center">
-          <div className="flex gap-1">
-            {STATUS_OPCOES.map(o => (
-              <Button
-                key={o.v}
-                size="sm"
-                variant={statusFilter === o.v ? "default" : "outline"}
-                onClick={() => onStatusChange(o.v)}
-              >
-                {o.label}
-              </Button>
-            ))}
-          </div>
-          <input
-            type="text"
-            placeholder="Buscar nome ou telefone..."
-            value={search}
-            onChange={e => onSearchChange(e.target.value)}
-            className="border rounded px-3 py-1.5 text-sm flex-1 min-w-[200px] bg-background"
-          />
-        </div>
       </CardHeader>
       <CardContent>
         <table className="w-full text-sm">
           <thead className="text-xs text-muted-foreground uppercase">
-            <tr>
-              <th className="text-left p-2">Nome</th>
-              <th className="text-left p-2">Telefone</th>
-              <th className="text-left p-2">Status</th>
-              <th className="text-left p-2">Enviado em</th>
-              <th className="text-left p-2">Tentativas</th>
-            </tr>
+            <tr><th className="text-left p-2">Nome</th><th className="text-left p-2">Telefone</th><th className="text-left p-2">Status</th><th className="text-left p-2">Enviado em</th></tr>
           </thead>
           <tbody>
-            {fila.length === 0 ? (
-              <tr><td colSpan={5} className="p-4 text-center text-muted-foreground">Nenhum lead encontrado</td></tr>
-            ) : fila.map(f => (
+            {fila.map(f => (
               <tr key={f.id} className="border-t border-border">
-                <td className="p-2">{f.nome || <span className="text-muted-foreground italic">(sem nome)</span>}</td>
+                <td className="p-2">{f.nome}</td>
                 <td className="p-2 font-mono text-xs">{f.telefone}</td>
-                <td className="p-2">
-                  <Badge
-                    variant="outline"
-                    className={
-                      f.status === "enviado" ? "bg-blue-50 text-blue-700 border-blue-200" :
-                      f.status === "falhou" ? "bg-red-50 text-red-700 border-red-200" :
-                      f.status === "optout_pre" ? "bg-slate-100 text-slate-600" : ""
-                    }
-                  >
-                    {f.status}
-                  </Badge>
-                </td>
+                <td className="p-2"><Badge variant="outline">{f.status}</Badge></td>
                 <td className="p-2 text-xs">{f.enviado_em ? new Date(f.enviado_em).toLocaleString("pt-BR") : "--"}</td>
-                <td className="p-2 text-xs">{f.tentativas}</td>
               </tr>
             ))}
           </tbody>
         </table>
-
-        <div className="flex items-center justify-between mt-4 text-xs text-muted-foreground">
-          <span>Mostrando {from} a {to} de {total}</span>
-          <div className="flex gap-1 items-center">
-            <Button size="sm" variant="outline" onClick={() => onPageChange(0)} disabled={page === 0}>«</Button>
-            <Button size="sm" variant="outline" onClick={() => onPageChange(Math.max(0, page - 1))} disabled={page === 0}>‹</Button>
-            <span className="px-3">Página {page + 1} de {totalPages}</span>
-            <Button size="sm" variant="outline" onClick={() => onPageChange(Math.min(totalPages - 1, page + 1))} disabled={page >= totalPages - 1}>›</Button>
-            <Button size="sm" variant="outline" onClick={() => onPageChange(totalPages - 1)} disabled={page >= totalPages - 1}>»</Button>
-          </div>
-        </div>
+        <p className="text-xs text-muted-foreground mt-2">Mostrando últimas 30 atualizações</p>
       </CardContent>
     </Card>
   );
