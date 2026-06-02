@@ -123,8 +123,14 @@ export function aplicarVarsCopy(template: string, lead: { nome: string }): strin
 
 export const COPY_OPTOUT_LINE = "Se preferir não receber mais ofertas, responda SAIR.";
 
-export function validarCopy(texto: string): { ok: boolean; erros: string[] } {
+export function validarCopy(texto: string, modo: "automatico" | "manual" = "automatico"): { ok: boolean; erros: string[] } {
   const erros: string[] = [];
+  if (modo === "manual") {
+    if (texto.trim().length < 30) erros.push("Curta demais (mínimo 30 chars)");
+    if (texto.length > 1500) erros.push("Longa demais (máximo 1500 chars)");
+    if (/[—–]/.test(texto)) erros.push("Contém travessão (proibido)");
+    return { ok: erros.length === 0, erros };
+  }
   if (texto.length < 80) erros.push("Curta demais (mínimo 80 chars)");
   if (texto.length > 700) erros.push("Longa demais (máximo 700 chars)");
   if (/[—–]/.test(texto)) erros.push("Contém travessão (proibido)");

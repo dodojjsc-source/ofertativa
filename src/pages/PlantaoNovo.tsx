@@ -87,7 +87,11 @@ export default function PlantaoNovo() {
   const podeAvancar = () => {
     if (step === 1) return nome.trim().length >= 3;
     if (step === 2) return leadsFinais.length > 0;
-    if (step === 3) return copies.filter(c => c.ativa && validarCopy(c.texto).ok).length >= 3 && pilares.filter(p => p.trim().length > 5).length >= 2;
+    if (step === 3) {
+      const copiesOk = copies.filter(c => c.ativa && validarCopy(c.texto, modo).ok).length >= 3;
+      if (modo === "manual") return copiesOk;
+      return copiesOk && pilares.filter(p => p.trim().length > 5).length >= 2;
+    }
     if (step === 4) return modo === "manual"
       ? corretoresSelecionados.length > 0
       : chipInstance.trim().length > 0;
@@ -222,7 +226,7 @@ export default function PlantaoNovo() {
       const plantaoId = plantao.id;
 
       // Insere copies
-      const ativas = copies.filter(c => c.ativa && validarCopy(c.texto).ok);
+      const ativas = copies.filter(c => c.ativa && validarCopy(c.texto, modo).ok);
       if (ativas.length > 0) {
         const { error: e2 } = await (supabase as any).from("disparo_copies").insert(
           ativas.map((c, i) => ({
@@ -305,6 +309,31 @@ export default function PlantaoNovo() {
           <Card>
             <CardHeader><CardTitle>Identificação</CardTitle></CardHeader>
             <CardContent className="space-y-4">
+              <div>
+                <Label>Modo de disparo *</Label>
+                <div className="grid grid-cols-2 gap-3 mt-2">
+                  <button
+                    type="button"
+                    onClick={() => setModo("automatico")}
+                    className={`border-2 rounded-lg p-3 text-left transition ${
+                      modo === "automatico" ? "border-primary bg-primary/5" : "border-border hover:border-muted-foreground/40"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 font-bold"><Bot className="h-4 w-4" /> Automático</div>
+                    <p className="text-xs text-muted-foreground mt-1">Worker dispara via Evolution. Exige opt-out na copy e e-flyer.</p>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setModo("manual")}
+                    className={`border-2 rounded-lg p-3 text-left transition ${
+                      modo === "manual" ? "border-green-600 bg-green-50" : "border-border hover:border-muted-foreground/40"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 font-bold"><MessageCircle className="h-4 w-4 text-green-600" /> Manual (corretor)</div>
+                    <p className="text-xs text-muted-foreground mt-1">Corretor manda do WA Web dele. Copy livre, sem opt-out obrigatório.</p>
+                  </button>
+                </div>
+              </div>
               <div>
                 <Label>Nome do plantão *</Label>
                 <Input value={nome} onChange={e => setNome(e.target.value)} placeholder="Ex: Plantão VS Villa Setai - Fase B" />
@@ -422,6 +451,7 @@ export default function PlantaoNovo() {
 
         {step === 3 && (
           <div className="space-y-4">
+            {modo === "automatico" && (
             <Card>
               <CardHeader><CardTitle>Conteúdo da oferta</CardTitle></CardHeader>
               <CardContent className="space-y-4">
@@ -450,6 +480,7 @@ export default function PlantaoNovo() {
                 </div>
               </CardContent>
             </Card>
+            )}
 
             <Card>
               <CardHeader className="flex flex-row items-center justify-between">
@@ -457,16 +488,15 @@ export default function PlantaoNovo() {
                 <div className="flex gap-2">
                   <Button
                     variant="outline"
-                    onClick={() => setCopies([
-                      { texto: `Olá {{primeiro_nome}}, [cole aqui sua copy 1]. ${COPY_OPTOUT_LINE}`, ativa: true },
-                      { texto: `Olá {{primeiro_nome}}, [cole aqui sua copy 2]. ${COPY_OPTOUT_LINE}`, ativa: true },
-                      { texto: `Olá {{primeiro_nome}}, [cole aqui sua copy 3]. ${COPY_OPTOUT_LINE}`, ativa: true },
-                      { texto: `Olá {{primeiro_nome}}, [cole aqui sua copy 4]. ${COPY_OPTOUT_LINE}`, ativa: true },
-                      { texto: `Olá {{primeiro_nome}}, [cole aqui sua copy 5]. ${COPY_OPTOUT_LINE}`, ativa: true },
-                    ])}
+                    onClick={() => {
+                      const base = modo === "manual"
+                        ? ""
+                        : `Olá {{primeiro_nome}}, [escrever copy aqui]. ${COPY_OPTOUT_LINE}`;
+                      setCopies([1,2,3,4,5].map(() => ({ texto: base, ativa: true })));
+                    }}
                   >
                     <Plus className="mr-2 h-4 w-4" />
-                    Colar minhas 5 copies
+                    Criar 5 campos vazios
                   </Button>
                   <Button onClick={gerarCopies} disabled={gerandoCopies || pilares.filter(p => p.trim()).length < 2}>
                     {gerandoCopies ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
@@ -484,7 +514,7 @@ export default function PlantaoNovo() {
                   </div>
                 ) : (
                   copies.map((c, i) => {
-                    const v = validarCopy(c.texto);
+                    const v = validarCopy(c.texto, modo);
                     return (
                       <div key={i} className={`border rounded-lg p-3 ${c.ativa ? "border-green-300 bg-green-50/40" : "border-muted bg-muted/30 opacity-60"}`}>
                         <div className="flex items-center justify-between mb-2">
@@ -539,30 +569,12 @@ export default function PlantaoNovo() {
           <Card>
             <CardHeader><CardTitle>Configuração de disparo</CardTitle></CardHeader>
             <CardContent className="space-y-4">
-              <div>
-                <Label>Modo de disparo</Label>
-                <div className="grid grid-cols-2 gap-3 mt-2">
-                  <button
-                    type="button"
-                    onClick={() => setModo("automatico")}
-                    className={`border-2 rounded-lg p-3 text-left transition ${
-                      modo === "automatico" ? "border-primary bg-primary/5" : "border-border hover:border-muted-foreground/40"
-                    }`}
-                  >
-                    <div className="flex items-center gap-2 font-bold"><Bot className="h-4 w-4" /> Automático</div>
-                    <p className="text-xs text-muted-foreground mt-1">Worker dispara via Evolution no ritmo configurado. Sem trabalho manual do corretor.</p>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setModo("manual")}
-                    className={`border-2 rounded-lg p-3 text-left transition ${
-                      modo === "manual" ? "border-green-600 bg-green-50" : "border-border hover:border-muted-foreground/40"
-                    }`}
-                  >
-                    <div className="flex items-center gap-2 font-bold"><MessageCircle className="h-4 w-4 text-green-600" /> Manual (corretor)</div>
-                    <p className="text-xs text-muted-foreground mt-1">Cada corretor abre o WhatsApp Web dele e manda. Sistema registra print + status.</p>
-                  </button>
-                </div>
+              <div className="bg-muted/40 border rounded p-3 text-sm flex items-center gap-2">
+                {modo === "manual" ? (
+                  <><MessageCircle className="h-4 w-4 text-green-600" /> Modo <strong>Manual (corretor)</strong> selecionado no passo 1</>
+                ) : (
+                  <><Bot className="h-4 w-4" /> Modo <strong>Automático</strong> selecionado no passo 1</>
+                )}
               </div>
 
               {modo === "manual" && (
