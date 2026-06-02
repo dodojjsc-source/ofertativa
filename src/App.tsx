@@ -37,6 +37,7 @@ import NotFound from "./pages/NotFound";
 import PlantaoLista from "./pages/Plantao";
 import PlantaoNovo from "./pages/PlantaoNovo";
 import PlantaoDetalhe from "./pages/PlantaoDetalhe";
+import AbordagemManual from "./pages/AbordagemManual";
 
 const queryClient = new QueryClient();
 
@@ -200,8 +201,16 @@ const App = () => (
                       <Route
                         path="/plantao/:id"
                         element={
-                          <ProtectedRoute allowedRoles={["admin"]}>
+                          <ProtectedRoute allowedRoles={["admin", "gestor"]}>
                             <PlantaoDetalhe />
+                          </ProtectedRoute>
+                        }
+                      />
+                      <Route
+                        path="/abordagem-ativa"
+                        element={
+                          <ProtectedRoute allowedRoles={["corretor", "admin", "gestor"]}>
+                            <AbordagemManual />
                           </ProtectedRoute>
                         }
                       />

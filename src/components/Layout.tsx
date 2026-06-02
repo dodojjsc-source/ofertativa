@@ -2,7 +2,7 @@ import { ReactNode } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
-import { LayoutDashboard, Upload, Phone, History, Users, FolderOpen, Send, BarChart3, AlertCircle, UserX, PhoneOff, LogOut, Database, Megaphone } from "lucide-react";
+import { LayoutDashboard, Upload, Phone, History, Users, FolderOpen, Send, BarChart3, AlertCircle, UserX, PhoneOff, LogOut, Database, Megaphone, MessageCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 export function Layout({
   children
@@ -39,6 +39,11 @@ export function Layout({
     label: "Atendimento",
     icon: Phone,
     roles: ["corretor"]
+  }, {
+    path: "/abordagem-ativa",
+    label: "Abordagem WhatsApp",
+    icon: MessageCircle,
+    roles: ["corretor", "admin", "gestor"]
   }, {
     path: "/historico",
     label: "Histórico",

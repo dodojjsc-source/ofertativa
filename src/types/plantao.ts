@@ -13,6 +13,15 @@ export type DisparoFilaStatus =
   | "optout_pre"
   | "cancelado";
 
+export type PlantaoModo = "automatico" | "manual";
+
+export type AbordagemManualStatus =
+  | "pendente"
+  | "abriu_wa"
+  | "enviou"
+  | "nao_enviou"
+  | "respondida";
+
 export type DisparoLogEvento = "enviado" | "entregue" | "lido" | "falha";
 
 export type RespostaClassificacao =
@@ -50,6 +59,7 @@ export interface Plantao {
   corretores_handoff: string[];
   modo_handoff: "pull" | "round_robin";
   bitrix_funil_id: string | null;
+  modo: PlantaoModo;
   total_leads: number;
   total_enviados: number;
   total_entregues: number;
@@ -94,6 +104,14 @@ export interface DisparoFila {
   evolution_msg_id: string | null;
   motivo_falha: string | null;
   tentativas: number;
+  corretor_id: string | null;
+  abordagem_status: AbordagemManualStatus | null;
+  texto_enviado: string | null;
+  complemento_livre: string | null;
+  abordagem_aberto_em: string | null;
+  abordagem_confirmado_em: string | null;
+  abordagem_motivo_nao_envio: string | null;
+  print_url: string | null;
   created_at: string;
   updated_at: string;
 }

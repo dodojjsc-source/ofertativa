@@ -6,9 +6,9 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { ArrowLeft, ArrowRight, Upload, Sparkles, Check, AlertCircle, Loader2, Send, X, Plus } from "lucide-react";
+import { ArrowLeft, ArrowRight, Upload, Sparkles, Check, AlertCircle, Loader2, Send, X, Plus, MessageCircle, Bot } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import { parseCsvText, ParseResult, ParsedLead, checarOptoutGlobal, validarCopy, COPY_OPTOUT_LINE } from "@/lib/plantao";
@@ -17,6 +17,7 @@ import { useCampanhas } from "@/contexts/CampanhasContext";
 import { useLeads } from "@/contexts/LeadsContext";
 import { normalizarTelefone } from "@/lib/phoneNormalization";
 import { Database } from "lucide-react";
+import { PlantaoModo } from "@/types/plantao";
 
 interface CopyDraft {
   texto: string;
@@ -64,16 +65,32 @@ export default function PlantaoNovo() {
   const [gerandoCopies, setGerandoCopies] = useState(false);
 
   // Step 4
+  const [modo, setModo] = useState<PlantaoModo>("automatico");
   const [chipInstance, setChipInstance] = useState("buzz-alertas");
   const [ritmoMin, setRitmoMin] = useState(60);
   const [ritmoMax, setRitmoMax] = useState(90);
   const [volMaxDia, setVolMaxDia] = useState(80);
+  const [corretoresSelecionados, setCorretoresSelecionados] = useState<string[]>([]);
+  const [corretoresDisp, setCorretoresDisp] = useState<{ id: string; name: string }[]>([]);
+
+  useEffect(() => {
+    (async () => {
+      const { data } = await (supabase as any)
+        .from("profiles")
+        .select("id, name")
+        .eq("role", "corretor")
+        .order("name");
+      setCorretoresDisp(data || []);
+    })();
+  }, []);
 
   const podeAvancar = () => {
     if (step === 1) return nome.trim().length >= 3;
     if (step === 2) return leadsFinais.length > 0;
     if (step === 3) return copies.filter(c => c.ativa && validarCopy(c.texto).ok).length >= 3 && pilares.filter(p => p.trim().length > 5).length >= 2;
-    if (step === 4) return chipInstance.trim().length > 0;
+    if (step === 4) return modo === "manual"
+      ? corretoresSelecionados.length > 0
+      : chipInstance.trim().length > 0;
     return false;
   };
 
@@ -188,10 +205,11 @@ export default function PlantaoNovo() {
           nome,
           descricao,
           status: statusFinal,
+          modo,
           eflyer_url: eflyerUrl || null,
           video_url: videoUrl || null,
           pilares: pilares.filter(p => p.trim()),
-          chip_instance: chipInstance,
+          chip_instance: modo === "manual" ? "manual" : chipInstance,
           ritmo_min_seg: ritmoMin,
           ritmo_max_seg: ritmoMax,
           volume_max_dia: volMaxDia,
@@ -223,16 +241,23 @@ export default function PlantaoNovo() {
       for (let i = 0; i < leadsFinais.length; i += batchSize) {
         const batch = leadsFinais.slice(i, i + batchSize);
         const { error: e3 } = await (supabase as any).from("disparo_fila").insert(
-          batch.map(l => ({
-            plantao_id: plantaoId,
-            nome: l.nome,
-            telefone: l.telefone_raw,
-            telefone_norm: l.telefone_norm,
-            email: l.email || null,
-            origem: l.origem || null,
-            bitrix_lead_id: l.bitrix_lead_id || null,
-            status: "aguardando" as const,
-          })),
+          batch.map((l, idx) => {
+            const corretorRR = modo === "manual" && corretoresSelecionados.length > 0
+              ? corretoresSelecionados[(i + idx) % corretoresSelecionados.length]
+              : null;
+            return {
+              plantao_id: plantaoId,
+              nome: l.nome,
+              telefone: l.telefone_raw,
+              telefone_norm: l.telefone_norm,
+              email: l.email || null,
+              origem: l.origem || null,
+              bitrix_lead_id: l.bitrix_lead_id || null,
+              status: "aguardando" as const,
+              corretor_id: corretorRR,
+              abordagem_status: modo === "manual" ? "pendente" : null,
+            };
+          }),
         );
         if (e3) throw e3;
       }
@@ -498,10 +523,64 @@ export default function PlantaoNovo() {
             <CardHeader><CardTitle>Configuração de disparo</CardTitle></CardHeader>
             <CardContent className="space-y-4">
               <div>
+                <Label>Modo de disparo</Label>
+                <div className="grid grid-cols-2 gap-3 mt-2">
+                  <button
+                    type="button"
+                    onClick={() => setModo("automatico")}
+                    className={`border-2 rounded-lg p-3 text-left transition ${
+                      modo === "automatico" ? "border-primary bg-primary/5" : "border-border hover:border-muted-foreground/40"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 font-bold"><Bot className="h-4 w-4" /> Automático</div>
+                    <p className="text-xs text-muted-foreground mt-1">Worker dispara via Evolution no ritmo configurado. Sem trabalho manual do corretor.</p>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setModo("manual")}
+                    className={`border-2 rounded-lg p-3 text-left transition ${
+                      modo === "manual" ? "border-green-600 bg-green-50" : "border-border hover:border-muted-foreground/40"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 font-bold"><MessageCircle className="h-4 w-4 text-green-600" /> Manual (corretor)</div>
+                    <p className="text-xs text-muted-foreground mt-1">Cada corretor abre o WhatsApp Web dele e manda. Sistema registra print + status.</p>
+                  </button>
+                </div>
+              </div>
+
+              {modo === "manual" && (
+                <div className="border border-green-200 bg-green-50/50 rounded p-3 space-y-2">
+                  <Label>Distribuir leads entre quais corretores? (round-robin)</Label>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-2 max-h-60 overflow-y-auto">
+                    {corretoresDisp.map((c) => (
+                      <label key={c.id} className="flex items-center gap-2 text-sm bg-white border rounded px-2 py-1.5 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={corretoresSelecionados.includes(c.id)}
+                          onChange={(e) => {
+                            if (e.target.checked) setCorretoresSelecionados([...corretoresSelecionados, c.id]);
+                            else setCorretoresSelecionados(corretoresSelecionados.filter((x) => x !== c.id));
+                          }}
+                        />
+                        <span className="truncate">{c.name}</span>
+                      </label>
+                    ))}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {corretoresSelecionados.length} corretor(es) selecionado(s). {leadsFinais.length > 0 && corretoresSelecionados.length > 0 && (
+                      <strong>~{Math.ceil(leadsFinais.length / corretoresSelecionados.length)} leads por corretor</strong>
+                    )}
+                  </p>
+                </div>
+              )}
+
+              {modo === "automatico" && (
+              <div>
                 <Label>Chip Evolution (instância)</Label>
                 <Input value={chipInstance} onChange={e => setChipInstance(e.target.value)} placeholder="buzz-vs-oferta" />
                 <p className="text-xs text-muted-foreground mt-1">Nome da instância no Evolution API. Deve estar conectada e aquecida.</p>
               </div>
+              )}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <Label>Ritmo mín (segundos)</Label>

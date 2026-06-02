@@ -3,7 +3,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ArrowLeft, Play, Pause, Square, RefreshCw, Loader2, Send, Eye, MessageSquare, Inbox, FileText, Users, AlertTriangle, Trash2, CheckCircle2 } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { ArrowLeft, Play, Pause, Square, RefreshCw, Loader2, Send, Eye, MessageSquare, Inbox, FileText, Users, AlertTriangle, Trash2, CheckCircle2, Image as ImageIcon, XCircle, Clock } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -137,14 +138,23 @@ export default function PlantaoDetalhe() {
           </CardContent>
         </Card>
 
-        <Tabs defaultValue="inbox" className="space-y-4">
+        <Tabs defaultValue={plantao.modo === "manual" ? "abordagens" : "inbox"} className="space-y-4">
           <TabsList>
+            {plantao.modo === "manual" && (
+              <TabsTrigger value="abordagens"><ImageIcon className="mr-1 h-4 w-4" /> Abordagens</TabsTrigger>
+            )}
             <TabsTrigger value="inbox"><Inbox className="mr-1 h-4 w-4" /> Inbox respostas ({respostas.length})</TabsTrigger>
             <TabsTrigger value="handoff"><Users className="mr-1 h-4 w-4" /> Handoff</TabsTrigger>
             <TabsTrigger value="copies"><FileText className="mr-1 h-4 w-4" /> Copies ({copies.length})</TabsTrigger>
             <TabsTrigger value="fila"><MessageSquare className="mr-1 h-4 w-4" /> Fila ({filaSample.length})</TabsTrigger>
             <TabsTrigger value="config"><Eye className="mr-1 h-4 w-4" /> Config</TabsTrigger>
           </TabsList>
+
+          {plantao.modo === "manual" && (
+            <TabsContent value="abordagens">
+              <AbordagensView plantaoId={plantao.id} />
+            </TabsContent>
+          )}
 
           <TabsContent value="inbox">
             <InboxRespostas respostas={respostas} onReload={load} />
@@ -352,4 +362,109 @@ function Row({ label, value }: { label: string; value: string }) {
       <span className="font-mono text-xs flex-1 break-all">{value}</span>
     </div>
   );
+}
+
+function AbordagensView({ plantaoId }: { plantaoId: string }) {
+  const [items, setItems] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [preview, setPreview] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    const { data } = await (supabase as any)
+      .from("disparo_fila")
+      .select("*, profiles!disparo_fila_corretor_id_fkey(name)")
+      .eq("plantao_id", plantaoId)
+      .not("corretor_id", "is", null)
+      .order("updated_at", { ascending: false });
+    setItems(data || []);
+    setLoading(false);
+  }, [plantaoId]);
+
+  useEffect(() => { load(); const i = setInterval(load, 15000); return () => clearInterval(i); }, [load]);
+
+  if (loading) return <Card><CardContent className="p-8 flex justify-center"><Loader2 className="h-6 w-6 animate-spin" /></CardContent></Card>;
+
+  const enviadas = items.filter((i) => i.abordagem_status === "enviou").length;
+  const naoEnviadas = items.filter((i) => i.abordagem_status === "nao_enviou").length;
+  const aguardando = items.filter((i) => i.abordagem_status === "abriu_wa").length;
+  const pendentes = items.filter((i) => !i.abordagem_status || i.abordagem_status === "pendente").length;
+  const taxa = items.length > 0 ? Math.round((enviadas / items.length) * 100) : 0;
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+        <Kpi label="Atribuídos" value={items.length} />
+        <Kpi label="Pendentes" value={pendentes} color="text-amber-600" />
+        <Kpi label="Aguardando" value={aguardando} color="text-blue-600" />
+        <Kpi label="Enviadas" value={enviadas} color="text-green-600" />
+        <Kpi label="Taxa envio" value={taxa as any} color="text-primary" />
+      </div>
+
+      <Card>
+        <CardContent className="p-0">
+          <table className="w-full text-sm">
+            <thead className="text-xs text-muted-foreground uppercase bg-muted/40">
+              <tr>
+                <th className="text-left p-3">Cliente</th>
+                <th className="text-left p-3">Corretor</th>
+                <th className="text-left p-3">Status</th>
+                <th className="text-left p-3">Quando</th>
+                <th className="text-left p-3">Motivo</th>
+                <th className="text-left p-3">Print</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.length === 0 ? (
+                <tr><td colSpan={6} className="p-8 text-center text-muted-foreground">Nenhum lead atribuído ainda</td></tr>
+              ) : items.map((i) => (
+                <tr key={i.id} className="border-t border-border hover:bg-muted/20">
+                  <td className="p-3">
+                    <div className="font-semibold">{i.nome}</div>
+                    <div className="text-xs text-muted-foreground font-mono">{i.telefone}</div>
+                  </td>
+                  <td className="p-3 text-xs">{i.profiles?.name || "--"}</td>
+                  <td className="p-3"><StatusAbordagem s={i.abordagem_status} /></td>
+                  <td className="p-3 text-xs">
+                    {i.abordagem_confirmado_em
+                      ? new Date(i.abordagem_confirmado_em).toLocaleString("pt-BR")
+                      : i.abordagem_aberto_em
+                      ? <span className="text-blue-600">Abriu {new Date(i.abordagem_aberto_em).toLocaleString("pt-BR")}</span>
+                      : "--"}
+                  </td>
+                  <td className="p-3 text-xs text-muted-foreground">{i.abordagem_motivo_nao_envio || "--"}</td>
+                  <td className="p-3">
+                    {i.print_url ? (
+                      <button onClick={() => setPreview(i.print_url)} className="text-primary hover:underline text-xs flex items-center gap-1">
+                        <ImageIcon className="h-3 w-3" /> Ver
+                      </button>
+                    ) : "--"}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </CardContent>
+      </Card>
+
+      <Dialog open={!!preview} onOpenChange={(o) => { if (!o) setPreview(null); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>Print da abordagem</DialogTitle></DialogHeader>
+          {preview && <img src={preview} alt="Print abordagem" className="w-full rounded" />}
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+function StatusAbordagem({ s }: { s: string | null }) {
+  const map: Record<string, { l: string; c: string; i: any }> = {
+    pendente: { l: "Pendente", c: "bg-amber-100 text-amber-700", i: Clock },
+    abriu_wa: { l: "Aguardando", c: "bg-blue-100 text-blue-700", i: Clock },
+    enviou: { l: "Enviada", c: "bg-green-100 text-green-700", i: CheckCircle2 },
+    nao_enviou: { l: "Não enviou", c: "bg-red-100 text-red-700", i: XCircle },
+    respondida: { l: "Respondida", c: "bg-purple-100 text-purple-700", i: MessageSquare },
+  };
+  const it = map[s || "pendente"] || map.pendente;
+  const Icon = it.i;
+  return <Badge className={it.c}><Icon className="mr-1 h-3 w-3" />{it.l}</Badge>;
 }
