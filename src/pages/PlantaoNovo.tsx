@@ -454,16 +454,33 @@ export default function PlantaoNovo() {
             <Card>
               <CardHeader className="flex flex-row items-center justify-between">
                 <CardTitle>Copies de disparo</CardTitle>
-                <Button onClick={gerarCopies} disabled={gerandoCopies || pilares.filter(p => p.trim()).length < 2}>
-                  {gerandoCopies ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
-                  Gerar 5 com IA
-                </Button>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={() => setCopies([
+                      { texto: `Olá {{primeiro_nome}}, [cole aqui sua copy 1]. ${COPY_OPTOUT_LINE}`, ativa: true },
+                      { texto: `Olá {{primeiro_nome}}, [cole aqui sua copy 2]. ${COPY_OPTOUT_LINE}`, ativa: true },
+                      { texto: `Olá {{primeiro_nome}}, [cole aqui sua copy 3]. ${COPY_OPTOUT_LINE}`, ativa: true },
+                      { texto: `Olá {{primeiro_nome}}, [cole aqui sua copy 4]. ${COPY_OPTOUT_LINE}`, ativa: true },
+                      { texto: `Olá {{primeiro_nome}}, [cole aqui sua copy 5]. ${COPY_OPTOUT_LINE}`, ativa: true },
+                    ])}
+                  >
+                    <Plus className="mr-2 h-4 w-4" />
+                    Colar minhas 5 copies
+                  </Button>
+                  <Button onClick={gerarCopies} disabled={gerandoCopies || pilares.filter(p => p.trim()).length < 2}>
+                    {gerandoCopies ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
+                    Gerar 5 com IA
+                  </Button>
+                </div>
               </CardHeader>
               <CardContent className="space-y-3">
                 {copies.length === 0 ? (
-                  <div className="text-center py-8 text-muted-foreground">
-                    <p>Clique em "Gerar 5 com IA" pra criar as copies a partir dos pilares</p>
-                    <p className="text-xs mt-2">Variáveis: <code>{"{{primeiro_nome}}"}</code></p>
+                  <div className="text-center py-8 text-muted-foreground space-y-2">
+                    <p className="font-semibold text-foreground">Você tem 2 caminhos:</p>
+                    <p className="text-sm"><strong>1.</strong> Já tem suas 5 copies prontas? Clica em <em>"Colar minhas 5 copies"</em> e cola cada uma no campo correspondente</p>
+                    <p className="text-sm"><strong>2.</strong> Quer que a IA crie? Preenche os 3 pilares acima e clica em <em>"Gerar 5 com IA"</em></p>
+                    <p className="text-xs mt-3">Variável disponível pra personalizar: <code>{"{{primeiro_nome}}"}</code></p>
                   </div>
                 ) : (
                   copies.map((c, i) => {
