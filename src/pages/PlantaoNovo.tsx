@@ -15,6 +15,7 @@ import { parseCsvText, ParseResult, ParsedLead, checarOptoutGlobal, validarCopy,
 import { useAuth } from "@/contexts/AuthContext";
 import { useCampanhas } from "@/contexts/CampanhasContext";
 import { useLeads } from "@/contexts/LeadsContext";
+import { useUsers } from "@/contexts/UsersContext";
 import { normalizarTelefone } from "@/lib/phoneNormalization";
 import { Database } from "lucide-react";
 import { PlantaoModo } from "@/types/plantao";
@@ -38,6 +39,7 @@ export default function PlantaoNovo() {
   const { user } = useAuth();
   const { campanhas } = useCampanhas();
   const { leads: leadsOfertativa } = useLeads();
+  const { users } = useUsers();
   const [step, setStep] = useState(1);
   const [salvando, setSalvando] = useState(false);
 
@@ -75,17 +77,13 @@ export default function PlantaoNovo() {
   const [ritmoMax, setRitmoMax] = useState(90);
   const [volMaxDia, setVolMaxDia] = useState(80);
   const [corretoresSelecionados, setCorretoresSelecionados] = useState<string[]>([]);
-  const [corretoresDisp, setCorretoresDisp] = useState<{ id: string; name: string }[]>([]);
+  const corretoresDisp = users
+    .filter((u) => u.role === "corretor" && u.status === "ativo")
+    .map((u) => ({ id: u.id, name: u.name }))
+    .sort((a, b) => a.name.localeCompare(b.name));
 
   useEffect(() => {
     (async () => {
-      const { data } = await (supabase as any)
-        .from("profiles")
-        .select("id, name")
-        .eq("role", "corretor")
-        .order("name");
-      setCorretoresDisp(data || []);
-
       const { data: pls } = await (supabase as any)
         .from("disparo_plantoes")
         .select("id, nome, disparo_copies(id)")
