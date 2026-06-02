@@ -53,6 +53,10 @@ export default function PlantaoNovo() {
   const [optoutCruzados, setOptoutCruzados] = useState<Set<string>>(new Set());
   const [leadsFinais, setLeadsFinais] = useState<ParsedLead[]>([]);
 
+  // Plantões existentes (pra importar copies)
+  const [plantoesExistentes, setPlantoesExistentes] = useState<{ id: string; nome: string; count: number }[]>([]);
+  const [importandoDe, setImportandoDe] = useState<string>("");
+
   // Step 3
   const [eflyerUrl, setEflyerUrl] = useState("https://hub.intelbuzz.com.br/plantao-assets/villasetai-flyer.jpg");
   const [videoUrl, setVideoUrl] = useState("");
@@ -81,8 +85,38 @@ export default function PlantaoNovo() {
         .eq("role", "corretor")
         .order("name");
       setCorretoresDisp(data || []);
+
+      const { data: pls } = await (supabase as any)
+        .from("disparo_plantoes")
+        .select("id, nome, disparo_copies(id)")
+        .order("created_at", { ascending: false });
+      setPlantoesExistentes(
+        (pls || [])
+          .map((p: any) => ({ id: p.id, nome: p.nome, count: (p.disparo_copies || []).length }))
+          .filter((p: any) => p.count > 0),
+      );
     })();
   }, []);
+
+  const importarCopiesDePlantao = async (plantaoId: string) => {
+    if (!plantaoId) return;
+    const { data, error } = await (supabase as any)
+      .from("disparo_copies")
+      .select("texto, ativa")
+      .eq("plantao_id", plantaoId)
+      .order("ordem");
+    if (error) {
+      toast({ title: "Erro ao importar copies", description: error.message, variant: "destructive" });
+      return;
+    }
+    if (!data || data.length === 0) {
+      toast({ title: "Plantão sem copies", variant: "destructive" });
+      return;
+    }
+    setCopies(data.map((c: any) => ({ texto: c.texto, ativa: c.ativa })));
+    toast({ title: `${data.length} copies importadas`, description: "Pode ajustar antes de aprovar." });
+    setImportandoDe("");
+  };
 
   const podeAvancar = () => {
     if (step === 1) return nome.trim().length >= 3;
@@ -483,9 +517,21 @@ export default function PlantaoNovo() {
             )}
 
             <Card>
-              <CardHeader className="flex flex-row items-center justify-between">
+              <CardHeader className="flex flex-row items-center justify-between flex-wrap gap-2">
                 <CardTitle>Copies de disparo</CardTitle>
-                <div className="flex gap-2">
+                <div className="flex gap-2 flex-wrap">
+                  {plantoesExistentes.length > 0 && (
+                    <select
+                      value={importandoDe}
+                      onChange={(e) => { setImportandoDe(e.target.value); importarCopiesDePlantao(e.target.value); }}
+                      className="border rounded px-3 py-2 text-sm bg-background"
+                    >
+                      <option value="">Importar de outro plantão...</option>
+                      {plantoesExistentes.map((p) => (
+                        <option key={p.id} value={p.id}>{p.nome} ({p.count} copies)</option>
+                      ))}
+                    </select>
+                  )}
                   <Button
                     variant="outline"
                     onClick={() => {
@@ -507,10 +553,11 @@ export default function PlantaoNovo() {
               <CardContent className="space-y-3">
                 {copies.length === 0 ? (
                   <div className="text-center py-8 text-muted-foreground space-y-2">
-                    <p className="font-semibold text-foreground">Você tem 2 caminhos:</p>
-                    <p className="text-sm"><strong>1.</strong> Já tem suas 5 copies prontas? Clica em <em>"Colar minhas 5 copies"</em> e cola cada uma no campo correspondente</p>
-                    <p className="text-sm"><strong>2.</strong> Quer que a IA crie? Preenche os 3 pilares acima e clica em <em>"Gerar 5 com IA"</em></p>
-                    <p className="text-xs mt-3">Variável disponível pra personalizar: <code>{"{{primeiro_nome}}"}</code></p>
+                    <p className="font-semibold text-foreground">3 caminhos pra preencher:</p>
+                    <p className="text-sm"><strong>1.</strong> <em>Importar de outro plantão</em> (dropdown acima) — puxa as copies de um plantão que você já criou</p>
+                    <p className="text-sm"><strong>2.</strong> <em>Criar 5 campos vazios</em> e colar suas copies prontas</p>
+                    <p className="text-sm"><strong>3.</strong> <em>Gerar 5 com IA</em> a partir dos pilares (modo automático)</p>
+                    <p className="text-xs mt-3">Variável: <code>{"{{primeiro_nome}}"}</code></p>
                   </div>
                 ) : (
                   copies.map((c, i) => {
