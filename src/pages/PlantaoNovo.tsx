@@ -77,13 +77,34 @@ export default function PlantaoNovo() {
   const [ritmoMax, setRitmoMax] = useState(90);
   const [volMaxDia, setVolMaxDia] = useState(80);
   const [corretoresSelecionados, setCorretoresSelecionados] = useState<string[]>([]);
-  const corretoresDisp = users
+  const [corretoresFallback, setCorretoresFallback] = useState<{ id: string; name: string }[]>([]);
+  const corretoresDoContext = users
     .filter((u) => u.role === "corretor" && u.status === "ativo")
-    .map((u) => ({ id: u.id, name: u.name }))
+    .map((u) => ({ id: u.id, name: u.name }));
+  const corretoresDisp = (corretoresDoContext.length > 0 ? corretoresDoContext : corretoresFallback)
     .sort((a, b) => a.name.localeCompare(b.name));
 
   useEffect(() => {
     (async () => {
+      // Fallback direto via profiles caso UsersContext esteja vazio
+      try {
+        const { data: profs } = await (supabase as any)
+          .from("profiles")
+          .select("id, name, status")
+          .eq("status", "ativo")
+          .order("name");
+        const { data: roles } = await (supabase as any)
+          .from("user_roles")
+          .select("user_id, role");
+        const corretorIds = new Set((roles || []).filter((r: any) => r.role === "corretor").map((r: any) => r.user_id));
+        const corretores = (profs || [])
+          .filter((p: any) => corretorIds.has(p.id))
+          .map((p: any) => ({ id: p.id, name: p.name }));
+        setCorretoresFallback(corretores);
+      } catch (e) {
+        console.warn("fallback corretores falhou", e);
+      }
+
       const { data: pls } = await (supabase as any)
         .from("disparo_plantoes")
         .select("id, nome, disparo_copies(id)")
@@ -624,22 +645,36 @@ export default function PlantaoNovo() {
 
               {modo === "manual" && (
                 <div className="border border-green-200 bg-green-50/50 rounded p-3 space-y-2">
-                  <Label>Distribuir leads entre quais corretores? (round-robin)</Label>
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-2 max-h-60 overflow-y-auto">
-                    {corretoresDisp.map((c) => (
-                      <label key={c.id} className="flex items-center gap-2 text-sm bg-white border rounded px-2 py-1.5 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={corretoresSelecionados.includes(c.id)}
-                          onChange={(e) => {
-                            if (e.target.checked) setCorretoresSelecionados([...corretoresSelecionados, c.id]);
-                            else setCorretoresSelecionados(corretoresSelecionados.filter((x) => x !== c.id));
-                          }}
-                        />
-                        <span className="truncate">{c.name}</span>
-                      </label>
-                    ))}
+                  <div className="flex items-center justify-between">
+                    <Label>Distribuir leads entre quais corretores? (round-robin)</Label>
+                    {corretoresDisp.length > 0 && (
+                      <div className="flex gap-2">
+                        <Button type="button" size="sm" variant="outline" onClick={() => setCorretoresSelecionados(corretoresDisp.map((c) => c.id))}>Selecionar todos</Button>
+                        <Button type="button" size="sm" variant="ghost" onClick={() => setCorretoresSelecionados([])}>Limpar</Button>
+                      </div>
+                    )}
                   </div>
+                  {corretoresDisp.length === 0 ? (
+                    <div className="bg-amber-50 border border-amber-200 rounded p-3 text-sm text-amber-900">
+                      Nenhum corretor ativo encontrado. Verifica em <strong>Usuários</strong> se há corretores com status ativo. Total carregado pelo sistema: <strong>{users.length}</strong> usuários no contexto.
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-2 max-h-60 overflow-y-auto">
+                      {corretoresDisp.map((c) => (
+                        <label key={c.id} className="flex items-center gap-2 text-sm bg-white border rounded px-2 py-1.5 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={corretoresSelecionados.includes(c.id)}
+                            onChange={(e) => {
+                              if (e.target.checked) setCorretoresSelecionados([...corretoresSelecionados, c.id]);
+                              else setCorretoresSelecionados(corretoresSelecionados.filter((x) => x !== c.id));
+                            }}
+                          />
+                          <span className="truncate">{c.name}</span>
+                        </label>
+                      ))}
+                    </div>
+                  )}
                   <p className="text-xs text-muted-foreground">
                     {corretoresSelecionados.length} corretor(es) selecionado(s). {leadsFinais.length > 0 && corretoresSelecionados.length > 0 && (
                       <strong>~{Math.ceil(leadsFinais.length / corretoresSelecionados.length)} leads por corretor</strong>
