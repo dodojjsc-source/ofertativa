@@ -78,6 +78,7 @@ export default function PlantaoNovo() {
   const [volMaxDia, setVolMaxDia] = useState(80);
   const [corretoresSelecionados, setCorretoresSelecionados] = useState<string[]>([]);
   const [corretoresFallback, setCorretoresFallback] = useState<{ id: string; name: string }[]>([]);
+  const [countsCampanha, setCountsCampanha] = useState<Record<string, number>>({});
   const corretoresDoContext = users
     .filter((u) => u.role === "corretor" && u.status === "ativo")
     .map((u) => ({ id: u.id, name: u.name }));
@@ -86,6 +87,18 @@ export default function PlantaoNovo() {
 
   useEffect(() => {
     (async () => {
+      // Contagem rápida de leads por campanha via RPC agregada
+      try {
+        const { data: counts } = await (supabase as any).rpc("count_leads_por_campanha");
+        if (counts) {
+          const map: Record<string, number> = {};
+          counts.forEach((c: any) => { map[c.campanha_id] = Number(c.total); });
+          setCountsCampanha(map);
+        }
+      } catch (e) {
+        console.warn("count_leads_por_campanha falhou", e);
+      }
+
       // Fallback direto via profiles caso UsersContext esteja vazio
       try {
         const { data: profs } = await (supabase as any)
@@ -178,7 +191,29 @@ export default function PlantaoNovo() {
       setOptoutCruzados(new Set());
       return;
     }
-    const leadsDaCampanha = leadsOfertativa.filter(l => l.campanhaId === campanhaId);
+
+    // Tenta cache do contexto, senao busca direto (rápido pq filtrada por campanha)
+    let leadsDaCampanha = leadsOfertativa.filter(l => l.campanhaId === campanhaId);
+    if (leadsDaCampanha.length === 0 && (countsCampanha[campanhaId] || 0) > 0) {
+      const pageSize = 1000;
+      let all: any[] = [];
+      let from = 0;
+      while (true) {
+        const { data, error } = await (supabase as any)
+          .from("leads")
+          .select("id, nome, telefone, email, campanha_id")
+          .eq("campanha_id", campanhaId)
+          .range(from, from + pageSize - 1);
+        if (error) break;
+        if (!data || data.length === 0) break;
+        all = all.concat(data);
+        if (data.length < pageSize) break;
+        from += pageSize;
+      }
+      leadsDaCampanha = all.map((l: any) => ({
+        id: l.id, nome: l.nome, telefone: l.telefone, email: l.email, campanhaId: l.campanha_id,
+      })) as any;
+    }
     const validos: ParsedLead[] = [];
     const descartados: ParsedLead[] = [];
     const vistos = new Set<string>();
@@ -432,14 +467,17 @@ export default function PlantaoNovo() {
                     onChange={e => importarDeCampanha(e.target.value)}
                   >
                     <option value="">-- Selecione uma campanha --</option>
-                    {campanhas.map(c => {
-                      const total = leadsOfertativa.filter(l => l.campanhaId === c.id).length;
-                      return (
-                        <option key={c.id} value={c.id}>
-                          {c.nome} ({total} leads)
-                        </option>
-                      );
-                    })}
+                    {campanhas
+                      .slice()
+                      .sort((a, b) => (countsCampanha[b.id] || 0) - (countsCampanha[a.id] || 0))
+                      .map(c => {
+                        const total = countsCampanha[c.id] ?? (leadsOfertativa.filter(l => l.campanhaId === c.id).length || 0);
+                        return (
+                          <option key={c.id} value={c.id}>
+                            {c.nome} ({total} leads)
+                          </option>
+                        );
+                      })}
                   </select>
                   {campanhas.length === 0 && (
                     <p className="text-xs text-muted-foreground">Nenhuma campanha cadastrada no Ofertativa. Use CSV ou cadastre em /campanhas primeiro.</p>
