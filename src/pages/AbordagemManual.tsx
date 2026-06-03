@@ -102,7 +102,12 @@ export default function AbordagemManual() {
     if (!leadAtivo || !copySelecionada) return "#";
     const texto = resolverTexto(copySelecionada.texto, leadAtivo.nome);
     const tel = leadAtivo.telefone_norm || leadAtivo.telefone.replace(/\D/g, "");
-    return `https://wa.me/${tel}?text=${encodeURIComponent(texto)}`;
+    const isMobile = typeof navigator !== "undefined" && /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
+    // Desktop: pula a página de confirmação do wa.me e abre direto no WhatsApp Web.
+    // Mobile: wa.me abre o app nativo.
+    return isMobile
+      ? `https://wa.me/${tel}?text=${encodeURIComponent(texto)}`
+      : `https://web.whatsapp.com/send?phone=${tel}&text=${encodeURIComponent(texto)}`;
   })();
 
   const aoClicarAbrirWa = () => {
