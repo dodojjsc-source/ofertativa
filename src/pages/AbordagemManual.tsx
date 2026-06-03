@@ -371,7 +371,8 @@ export default function AbordagemManual() {
               disabled={!copySelecionada || salvando}
               className="bg-green-600 hover:bg-green-700"
               onClick={() => {
-                window.open(waUrl, "_blank");
+                // "whatsapp_web" reusa a mesma aba a cada clique em vez de abrir uma nova.
+                window.open(waUrl, "whatsapp_web");
                 aoClicarAbrirWa();
               }}
             >
