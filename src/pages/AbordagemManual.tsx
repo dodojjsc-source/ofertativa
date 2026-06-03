@@ -98,35 +98,47 @@ export default function AbordagemManual() {
 
   const primeiroNome = (n: string) => (n || "").split(" ")[0] || n || "";
 
-  const abrirWa = async () => {
+  const abrirWa = () => {
     if (!leadAtivo || !copySelecionada) return;
     const texto = resolverTexto(copySelecionada.texto, leadAtivo.nome);
-    setSalvando(true);
+    const tel = leadAtivo.telefone_norm || leadAtivo.telefone.replace(/\D/g, "");
+    const url = `https://wa.me/${tel}?text=${encodeURIComponent(texto)}`;
 
-    try {
-      const { error } = await (supabase as any).rpc("abordagem_abrir_wa", {
-        _fila_id: leadAtivo.id,
-        _copy_id: copySelecionada.id,
-        _texto: texto,
-        _complemento: complemento.trim() || null,
+    // Abre IMEDIATAMENTE (dentro do click handler) pra não perder o gesto do usuário.
+    const win = window.open(url, "_blank", "noopener,noreferrer");
+    if (!win) {
+      toast({
+        title: "Popup bloqueado",
+        description: "Libera popups pra ofertativa.intelbuzz.com.br no navegador e tenta de novo.",
+        variant: "destructive",
       });
-      if (error) throw error;
-
-      const tel = leadAtivo.telefone_norm || leadAtivo.telefone.replace(/\D/g, "");
-      const url = `https://wa.me/${tel}?text=${encodeURIComponent(texto)}`;
-      window.open(url, "_blank", "noopener,noreferrer");
-
-      const leadComTexto = { ...leadAtivo, texto_enviado: texto };
-      setConfirmando(leadComTexto);
-      setLeadAtivo(null);
-      setCopySelecionada(null);
-      setComplemento("");
-      load();
-    } catch (err: any) {
-      toast({ title: "Erro", description: err.message, variant: "destructive" });
-    } finally {
-      setSalvando(false);
+      return;
     }
+
+    setSalvando(true);
+    const leadComTexto = { ...leadAtivo, texto_enviado: texto };
+    setConfirmando(leadComTexto);
+    setLeadAtivo(null);
+    setCopySelecionada(null);
+    setComplemento("");
+
+    // Registra a intenção em background (não bloqueia o UX).
+    (async () => {
+      try {
+        const { error } = await (supabase as any).rpc("abordagem_abrir_wa", {
+          _fila_id: leadComTexto.id,
+          _copy_id: copySelecionada.id,
+          _texto: texto,
+          _complemento: complemento.trim() || null,
+        });
+        if (error) throw error;
+        load();
+      } catch (err: any) {
+        toast({ title: "Aviso", description: "WhatsApp abriu, mas falhou ao registrar: " + err.message, variant: "destructive" });
+      } finally {
+        setSalvando(false);
+      }
+    })();
   };
 
   const confirmarEnvio = async (enviou: boolean) => {
