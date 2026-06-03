@@ -199,27 +199,27 @@ export default function AbordagemManual() {
 
   return (
     <Layout>
-      <div className="space-y-6">
-        <div className="flex items-center gap-3">
-          <Button variant="ghost" size="icon" onClick={() => navigate("/")}>
+      <div className="space-y-4 sm:space-y-6">
+        <div className="flex items-center gap-2 sm:gap-3">
+          <Button variant="ghost" size="icon" onClick={() => navigate("/")} className="shrink-0">
             <ArrowLeft className="h-5 w-5" />
           </Button>
-          <div>
-            <h1 className="text-2xl font-bold flex items-center gap-2">
-              <MessageCircle className="h-7 w-7 text-green-600" />
-              Abordagem Ativa pelo WhatsApp
+          <div className="min-w-0">
+            <h1 className="text-lg sm:text-2xl font-bold flex items-center gap-2">
+              <MessageCircle className="h-5 w-5 sm:h-7 sm:w-7 text-green-600 shrink-0" />
+              <span className="truncate">Abordagem Ativa</span>
             </h1>
-            <p className="text-sm text-muted-foreground">
+            <p className="text-xs sm:text-sm text-muted-foreground hidden sm:block">
               Escolha a copy, clique pra abrir no seu WhatsApp Web e mande pro cliente
             </p>
           </div>
         </div>
 
         <Card>
-          <CardContent className="p-4 grid grid-cols-2 md:grid-cols-4 gap-3 text-center">
-            <Kpi label="Para abordar" value={leads.filter((l) => l.abordagem_status === "pendente" || !l.abordagem_status).length} cor="text-amber-600" />
-            <Kpi label="Aguardando confirmar" value={leads.filter((l) => l.abordagem_status === "abriu_wa").length} cor="text-blue-600" />
-            <Kpi label="Total atribuídos" value={leads.length} cor="" />
+          <CardContent className="p-3 sm:p-4 grid grid-cols-3 gap-2 sm:gap-3 text-center">
+            <Kpi label="Pra abordar" value={leads.filter((l) => l.abordagem_status === "pendente" || !l.abordagem_status).length} cor="text-amber-600" />
+            <Kpi label="Aguardando" value={leads.filter((l) => l.abordagem_status === "abriu_wa").length} cor="text-blue-600" />
+            <Kpi label="Total" value={leads.length} cor="" />
           </CardContent>
         </Card>
 
@@ -410,14 +410,14 @@ export default function AbordagemManual() {
 
       {/* DIALOG: confirmar envio + gerar print */}
       <Dialog open={!!confirmando} onOpenChange={(o) => { if (!o) { setConfirmando(null); setMotivoNaoEnvio(""); } }}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md h-[100dvh] sm:h-auto rounded-none sm:rounded-lg flex flex-col">
           <DialogHeader>
-            <DialogTitle>Você enviou pro {confirmando ? primeiroNome(confirmando.nome) : "cliente"}?</DialogTitle>
+            <DialogTitle className="text-lg">Você enviou pro {confirmando ? primeiroNome(confirmando.nome) : "cliente"}?</DialogTitle>
           </DialogHeader>
 
-          <div className="space-y-3">
+          <div className="space-y-3 flex-1">
             <p className="text-sm text-muted-foreground">
-              Se já mandou no WhatsApp Web, clique em <strong>Sim, enviei</strong> e o print fica registrado no histórico do lead.
+              Se já mandou no WhatsApp, toca <strong>Sim, enviei</strong> e o print fica registrado no histórico do lead.
             </p>
 
             {/* Print invisível pra capturar */}
@@ -438,7 +438,7 @@ export default function AbordagemManual() {
                 Se não enviou, qual o motivo?
               </label>
               <Select value={motivoNaoEnvio} onValueChange={setMotivoNaoEnvio}>
-                <SelectTrigger><SelectValue placeholder="Selecione (só se não enviou)" /></SelectTrigger>
+                <SelectTrigger className="h-12 sm:h-10 text-base sm:text-sm"><SelectValue placeholder="Selecione (só se não enviou)" /></SelectTrigger>
                 <SelectContent>
                   {MOTIVOS_NAO_ENVIO.map((m) => (
                     <SelectItem key={m} value={m}>{m}</SelectItem>
@@ -448,21 +448,21 @@ export default function AbordagemManual() {
             </div>
           </div>
 
-          <DialogFooter className="flex-col sm:flex-row gap-2">
+          <DialogFooter className="flex-col-reverse sm:flex-row gap-2 sm:gap-2 mt-auto sm:mt-0">
             <Button
               variant="outline"
               onClick={() => confirmarEnvio(false)}
               disabled={salvando || !motivoNaoEnvio}
-              className="text-red-600 border-red-200"
+              className="text-red-600 border-red-200 h-12 sm:h-10 text-base sm:text-sm"
             >
               <XCircle className="mr-1 h-4 w-4" /> Não enviei
             </Button>
             <Button
               onClick={() => confirmarEnvio(true)}
               disabled={salvando}
-              className="bg-green-600 hover:bg-green-700"
+              className="bg-green-600 hover:bg-green-700 h-14 sm:h-10 text-base sm:text-sm"
             >
-              {salvando ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-4 w-4" />}
+              {salvando ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-5 w-5 sm:h-4 sm:w-4" />}
               Sim, enviei
             </Button>
           </DialogFooter>
@@ -475,8 +475,8 @@ export default function AbordagemManual() {
 function Kpi({ label, value, cor }: { label: string; value: number; cor: string }) {
   return (
     <div>
-      <p className="text-xs text-muted-foreground uppercase tracking-wide">{label}</p>
-      <p className={`text-3xl font-bold ${cor}`}>{value}</p>
+      <p className="text-[10px] sm:text-xs text-muted-foreground uppercase tracking-wide">{label}</p>
+      <p className={`text-2xl sm:text-3xl font-bold ${cor}`}>{value}</p>
     </div>
   );
 }
