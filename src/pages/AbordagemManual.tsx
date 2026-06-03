@@ -259,9 +259,8 @@ export default function AbordagemManual() {
                     <div className="flex gap-2 pt-1">
                       {lead.abordagem_status === "abriu_wa" ? (
                         <Button
-                          size="sm"
                           variant="outline"
-                          className="flex-1"
+                          className="flex-1 h-12 sm:h-10 text-base sm:text-sm"
                           onClick={() => setConfirmando(lead)}
                         >
                           <Clock className="mr-1 h-4 w-4" />
@@ -269,8 +268,7 @@ export default function AbordagemManual() {
                         </Button>
                       ) : (
                         <Button
-                          size="sm"
-                          className="flex-1 bg-green-600 hover:bg-green-700"
+                          className="flex-1 bg-green-600 hover:bg-green-700 h-12 sm:h-10 text-base sm:text-sm"
                           disabled={copies.length === 0}
                           onClick={() => {
                             setLeadAtivo(lead);
@@ -293,17 +291,19 @@ export default function AbordagemManual() {
 
       {/* DIALOG: escolher copy + abrir wa.me */}
       <Dialog open={!!leadAtivo} onOpenChange={(o) => { if (!o) { setLeadAtivo(null); setCopySelecionada(null); setComplemento(""); } }}>
-        <DialogContent className="max-w-5xl">
+        <DialogContent className="max-w-5xl h-[100dvh] sm:h-auto sm:max-h-[90vh] overflow-y-auto rounded-none sm:rounded-lg p-4 sm:p-6">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <MessageCircle className="h-5 w-5 text-green-600" />
-              Abordar {leadAtivo?.nome}
+            <DialogTitle className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2 text-left">
+              <span className="flex items-center gap-2">
+                <MessageCircle className="h-5 w-5 text-green-600 shrink-0" />
+                <span className="truncate">Abordar {leadAtivo?.nome}</span>
+              </span>
               <span className="text-sm font-mono text-muted-foreground">{leadAtivo?.telefone}</span>
             </DialogTitle>
           </DialogHeader>
 
           {leadAtivo && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pb-24 sm:pb-0">
               <div className="space-y-3">
                 <div>
                   <label className="text-xs font-semibold uppercase text-muted-foreground">Copy</label>
@@ -314,7 +314,7 @@ export default function AbordagemManual() {
                       setCopySelecionada(c || null);
                     }}
                   >
-                    <SelectTrigger><SelectValue placeholder="Escolha uma copy" /></SelectTrigger>
+                    <SelectTrigger className="h-12 text-base"><SelectValue placeholder="Escolha uma copy" /></SelectTrigger>
                     <SelectContent>
                       {(copiesPorPlantao[leadAtivo.plantao_id] || []).map((c) => (
                         <SelectItem key={c.id} value={c.id}>
@@ -328,26 +328,27 @@ export default function AbordagemManual() {
                 {copySelecionada && (
                   <Card>
                     <CardContent className="p-3">
-                      <pre className="text-xs whitespace-pre-wrap font-sans">{copySelecionada.texto}</pre>
+                      <pre className="text-sm sm:text-xs whitespace-pre-wrap font-sans leading-relaxed">{copySelecionada.texto}</pre>
                     </CardContent>
                   </Card>
                 )}
 
                 <div>
                   <label className="text-xs font-semibold uppercase text-muted-foreground">
-                    Complemento livre (opcional, max 200 chars)
+                    Complemento livre (opcional)
                   </label>
                   <Textarea
                     placeholder="Personalize, mencione algo específico do cliente..."
                     value={complemento}
                     onChange={(e) => setComplemento(e.target.value.slice(0, 200))}
                     rows={2}
+                    className="text-base sm:text-sm"
                   />
                   <p className="text-xs text-muted-foreground mt-1">{complemento.length}/200</p>
                 </div>
               </div>
 
-              <div className="flex flex-col items-center gap-2">
+              <div className="hidden md:flex flex-col items-center gap-2">
                 <label className="text-xs font-semibold uppercase text-muted-foreground self-start">Preview</label>
                 <div style={{ transform: "scale(0.65)", transformOrigin: "top center", marginBottom: "-200px" }}>
                   {copySelecionada && (
@@ -363,13 +364,19 @@ export default function AbordagemManual() {
             </div>
           )}
 
-          <DialogFooter>
-            <Button variant="outline" onClick={() => { setLeadAtivo(null); setCopySelecionada(null); setComplemento(""); }}>
+          {/* Botão principal grande no mobile, footer normal no desktop */}
+          <div className="fixed bottom-0 left-0 right-0 sm:static bg-background border-t sm:border-0 p-4 sm:p-0 flex flex-col sm:flex-row gap-2 sm:justify-end z-10">
+            <Button
+              variant="outline"
+              className="hidden sm:inline-flex"
+              onClick={() => { setLeadAtivo(null); setCopySelecionada(null); setComplemento(""); }}
+            >
               Cancelar
             </Button>
             <Button
               variant="outline"
               disabled={!copySelecionada || salvando}
+              className="hidden sm:inline-flex"
               onClick={async () => {
                 if (!leadAtivo || !copySelecionada) return;
                 const texto = resolverTexto(copySelecionada.texto, leadAtivo.nome);
@@ -387,16 +394,17 @@ export default function AbordagemManual() {
             </Button>
             <Button
               disabled={!copySelecionada || salvando}
-              className="bg-green-600 hover:bg-green-700"
+              className="bg-green-600 hover:bg-green-700 h-14 sm:h-10 text-base sm:text-sm"
               onClick={() => {
                 window.open(waUrl, "_blank");
                 aoClicarAbrirWa();
               }}
             >
-              <Send className="mr-2 h-4 w-4" />
-              Abrir WhatsApp em nova aba
+              <Send className="mr-2 h-5 w-5 sm:h-4 sm:w-4" />
+              <span className="sm:hidden">Abrir WhatsApp agora</span>
+              <span className="hidden sm:inline">Abrir WhatsApp em nova aba</span>
             </Button>
-          </DialogFooter>
+          </div>
         </DialogContent>
       </Dialog>
 
