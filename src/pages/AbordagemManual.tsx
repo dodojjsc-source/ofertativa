@@ -98,45 +98,39 @@ export default function AbordagemManual() {
 
   const primeiroNome = (n: string) => (n || "").split(" ")[0] || n || "";
 
-  const abrirWa = () => {
-    if (!leadAtivo || !copySelecionada) return;
+  const waUrl = (() => {
+    if (!leadAtivo || !copySelecionada) return "#";
     const texto = resolverTexto(copySelecionada.texto, leadAtivo.nome);
     const tel = leadAtivo.telefone_norm || leadAtivo.telefone.replace(/\D/g, "");
-    const url = `https://wa.me/${tel}?text=${encodeURIComponent(texto)}`;
+    return `https://wa.me/${tel}?text=${encodeURIComponent(texto)}`;
+  })();
 
-    // Abre IMEDIATAMENTE (dentro do click handler) pra não perder o gesto do usuário.
-    const win = window.open(url, "_blank", "noopener,noreferrer");
-    if (!win) {
-      toast({
-        title: "Popup bloqueado",
-        description: "Libera popups pra ofertativa.intelbuzz.com.br no navegador e tenta de novo.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setSalvando(true);
+  const aoClicarAbrirWa = () => {
+    if (!leadAtivo || !copySelecionada) return;
+    const texto = resolverTexto(copySelecionada.texto, leadAtivo.nome);
     const leadComTexto = { ...leadAtivo, texto_enviado: texto };
+    const copyId = copySelecionada.id;
+    const compl = complemento.trim() || null;
+    const filaId = leadAtivo.id;
+
     setConfirmando(leadComTexto);
     setLeadAtivo(null);
     setCopySelecionada(null);
     setComplemento("");
 
-    // Registra a intenção em background (não bloqueia o UX).
+    // Registra a intenção em background (não bloqueia o UX nem a abertura do WA).
     (async () => {
       try {
         const { error } = await (supabase as any).rpc("abordagem_abrir_wa", {
-          _fila_id: leadComTexto.id,
-          _copy_id: copySelecionada.id,
+          _fila_id: filaId,
+          _copy_id: copyId,
           _texto: texto,
-          _complemento: complemento.trim() || null,
+          _complemento: compl,
         });
         if (error) throw error;
         load();
       } catch (err: any) {
-        toast({ title: "Aviso", description: "WhatsApp abriu, mas falhou ao registrar: " + err.message, variant: "destructive" });
-      } finally {
-        setSalvando(false);
+        toast({ title: "Aviso", description: "WhatsApp abriu, mas falhou registrar: " + err.message, variant: "destructive" });
       }
     })();
   };
@@ -369,12 +363,19 @@ export default function AbordagemManual() {
               Cancelar
             </Button>
             <Button
-              onClick={abrirWa}
+              asChild
               disabled={!copySelecionada || salvando}
               className="bg-green-600 hover:bg-green-700"
             >
-              {salvando ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
-              Abrir WhatsApp e registrar
+              <a
+                href={waUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={aoClicarAbrirWa}
+              >
+                <Send className="mr-2 h-4 w-4" />
+                Abrir WhatsApp e registrar
+              </a>
             </Button>
           </DialogFooter>
         </DialogContent>
