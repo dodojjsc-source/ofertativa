@@ -363,19 +363,15 @@ export default function AbordagemManual() {
               Cancelar
             </Button>
             <Button
-              asChild
               disabled={!copySelecionada || salvando}
               className="bg-green-600 hover:bg-green-700"
+              onClick={() => {
+                window.open(waUrl, "_blank");
+                aoClicarAbrirWa();
+              }}
             >
-              <a
-                href={waUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={aoClicarAbrirWa}
-              >
-                <Send className="mr-2 h-4 w-4" />
-                Abrir WhatsApp e registrar
-              </a>
+              <Send className="mr-2 h-4 w-4" />
+              Abrir WhatsApp e registrar
             </Button>
           </DialogFooter>
         </DialogContent>
