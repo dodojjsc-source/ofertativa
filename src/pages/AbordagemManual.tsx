@@ -368,16 +368,33 @@ export default function AbordagemManual() {
               Cancelar
             </Button>
             <Button
+              variant="outline"
               disabled={!copySelecionada || salvando}
-              className="bg-green-600 hover:bg-green-700"
-              onClick={() => {
-                // "whatsapp_web" reusa a mesma aba a cada clique em vez de abrir uma nova.
-                window.open(waUrl, "whatsapp_web");
+              onClick={async () => {
+                if (!leadAtivo || !copySelecionada) return;
+                const texto = resolverTexto(copySelecionada.texto, leadAtivo.nome);
+                try {
+                  await navigator.clipboard.writeText(texto);
+                  toast({ title: "Texto copiado", description: "Cola na conversa do cliente no WhatsApp Web." });
+                } catch {
+                  toast({ title: "Não consegui copiar", description: "Seleciona o texto manualmente.", variant: "destructive" });
+                }
                 aoClicarAbrirWa();
               }}
             >
               <Send className="mr-2 h-4 w-4" />
-              Abrir WhatsApp e registrar
+              Copiar texto e registrar
+            </Button>
+            <Button
+              disabled={!copySelecionada || salvando}
+              className="bg-green-600 hover:bg-green-700"
+              onClick={() => {
+                window.open(waUrl, "_blank");
+                aoClicarAbrirWa();
+              }}
+            >
+              <Send className="mr-2 h-4 w-4" />
+              Abrir WhatsApp em nova aba
             </Button>
           </DialogFooter>
         </DialogContent>
