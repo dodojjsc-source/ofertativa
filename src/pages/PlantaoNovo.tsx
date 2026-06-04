@@ -78,6 +78,8 @@ export default function PlantaoNovo() {
   const [volMaxDia, setVolMaxDia] = useState(80);
   const [corretoresSelecionados, setCorretoresSelecionados] = useState<string[]>([]);
   const [corretoresFallback, setCorretoresFallback] = useState<{ id: string; name: string }[]>([]);
+  const [loteDefault, setLoteDefault] = useState(20);
+  const [lotesPorCorretor, setLotesPorCorretor] = useState<Record<string, number>>({});
   const [countsCampanha, setCountsCampanha] = useState<Record<string, number>>({});
   const corretoresDoContext = users
     .filter((u) => u.role === "corretor" && u.status === "ativo")
@@ -305,7 +307,12 @@ export default function PlantaoNovo() {
           ritmo_min_seg: ritmoMin,
           ritmo_max_seg: ritmoMax,
           volume_max_dia: volMaxDia,
-          total_leads: leadsFinais.length,
+          total_leads: modo === "manual" && corretoresSelecionados.length > 0
+            ? Math.min(
+                leadsFinais.length,
+                corretoresSelecionados.reduce((acc, id) => acc + (lotesPorCorretor[id] ?? loteDefault), 0),
+              )
+            : leadsFinais.length,
           created_by: user.id,
         })
         .select()
@@ -328,35 +335,46 @@ export default function PlantaoNovo() {
         if (e2) throw e2;
       }
 
+      // Monta atribuição lead → corretor: sequencial por lote (manual) ou null (automático)
+      type LeadComCorretor = (typeof leadsFinais)[number] & { _corretorId: string | null };
+      const leadsAtribuidos: LeadComCorretor[] = [];
+      if (modo === "manual" && corretoresSelecionados.length > 0) {
+        let offset = 0;
+        for (const corretorId of corretoresSelecionados) {
+          const lote = lotesPorCorretor[corretorId] ?? loteDefault;
+          const chunk = leadsFinais.slice(offset, offset + lote);
+          chunk.forEach((l) => leadsAtribuidos.push({ ...l, _corretorId: corretorId }));
+          offset += lote;
+          if (offset >= leadsFinais.length) break;
+        }
+      } else {
+        leadsFinais.forEach((l) => leadsAtribuidos.push({ ...l, _corretorId: null }));
+      }
+
       // Insere fila em batches de 200
       const batchSize = 200;
-      for (let i = 0; i < leadsFinais.length; i += batchSize) {
-        const batch = leadsFinais.slice(i, i + batchSize);
+      for (let i = 0; i < leadsAtribuidos.length; i += batchSize) {
+        const batch = leadsAtribuidos.slice(i, i + batchSize);
         const { error: e3 } = await (supabase as any).from("disparo_fila").insert(
-          batch.map((l, idx) => {
-            const corretorRR = modo === "manual" && corretoresSelecionados.length > 0
-              ? corretoresSelecionados[(i + idx) % corretoresSelecionados.length]
-              : null;
-            return {
-              plantao_id: plantaoId,
-              nome: l.nome,
-              telefone: l.telefone_raw,
-              telefone_norm: l.telefone_norm,
-              email: l.email || null,
-              origem: l.origem || null,
-              bitrix_lead_id: l.bitrix_lead_id || null,
-              status: "aguardando" as const,
-              corretor_id: corretorRR,
-              abordagem_status: modo === "manual" ? "pendente" : null,
-            };
-          }),
+          batch.map((l) => ({
+            plantao_id: plantaoId,
+            nome: l.nome,
+            telefone: l.telefone_raw,
+            telefone_norm: l.telefone_norm,
+            email: l.email || null,
+            origem: l.origem || null,
+            bitrix_lead_id: l.bitrix_lead_id || null,
+            status: "aguardando" as const,
+            corretor_id: l._corretorId,
+            abordagem_status: modo === "manual" ? "pendente" : null,
+          })),
         );
         if (e3) throw e3;
       }
 
       toast({
         title: statusFinal === "aprovado" ? "Plantão aprovado e pronto pra disparar" : "Rascunho salvo",
-        description: `${leadsFinais.length} leads, ${ativas.length} copies`,
+        description: `${leadsAtribuidos.length} leads distribuídos, ${ativas.length} copies`,
       });
       navigate(`/plantao/${plantaoId}`);
     } catch (e: any) {
@@ -681,45 +699,109 @@ export default function PlantaoNovo() {
                 )}
               </div>
 
-              {modo === "manual" && (
-                <div className="border border-green-200 bg-green-50/50 rounded p-3 space-y-2">
+              {modo === "manual" && (() => {
+                const totalAlocado = corretoresSelecionados.reduce(
+                  (acc, id) => acc + (lotesPorCorretor[id] ?? loteDefault),
+                  0,
+                );
+                const sobra = Math.max(0, leadsFinais.length - totalAlocado);
+                const excesso = Math.max(0, totalAlocado - leadsFinais.length);
+                return (
+                <div className="border border-green-200 bg-green-50/50 rounded p-3 space-y-3">
                   <div className="flex items-center justify-between">
-                    <Label>Distribuir leads entre quais corretores? (round-robin)</Label>
+                    <Label>Distribuir leads entre quais corretores?</Label>
                     {corretoresDisp.length > 0 && (
                       <div className="flex gap-2">
                         <Button type="button" size="sm" variant="outline" onClick={() => setCorretoresSelecionados(corretoresDisp.map((c) => c.id))}>Selecionar todos</Button>
-                        <Button type="button" size="sm" variant="ghost" onClick={() => setCorretoresSelecionados([])}>Limpar</Button>
+                        <Button type="button" size="sm" variant="ghost" onClick={() => { setCorretoresSelecionados([]); setLotesPorCorretor({}); }}>Limpar</Button>
                       </div>
                     )}
                   </div>
+
+                  <div className="flex items-end gap-2 bg-white border rounded p-2">
+                    <div className="flex-1">
+                      <Label className="text-xs">Tamanho padrão do lote por corretor</Label>
+                      <Input
+                        type="number"
+                        min={1}
+                        value={loteDefault}
+                        onChange={(e) => setLoteDefault(Math.max(1, parseInt(e.target.value) || 1))}
+                        className="h-9"
+                      />
+                    </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        const novo: Record<string, number> = {};
+                        corretoresSelecionados.forEach((id) => { novo[id] = loteDefault; });
+                        setLotesPorCorretor(novo);
+                      }}
+                      disabled={corretoresSelecionados.length === 0}
+                    >
+                      Aplicar a todos
+                    </Button>
+                  </div>
+
                   {corretoresDisp.length === 0 ? (
                     <div className="bg-amber-50 border border-amber-200 rounded p-3 text-sm text-amber-900">
                       Nenhum corretor ativo encontrado. Verifica em <strong>Usuários</strong> se há corretores com status ativo. Total carregado pelo sistema: <strong>{users.length}</strong> usuários no contexto.
                     </div>
                   ) : (
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-2 max-h-60 overflow-y-auto">
-                      {corretoresDisp.map((c) => (
-                        <label key={c.id} className="flex items-center gap-2 text-sm bg-white border rounded px-2 py-1.5 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={corretoresSelecionados.includes(c.id)}
-                            onChange={(e) => {
-                              if (e.target.checked) setCorretoresSelecionados([...corretoresSelecionados, c.id]);
-                              else setCorretoresSelecionados(corretoresSelecionados.filter((x) => x !== c.id));
-                            }}
-                          />
-                          <span className="truncate">{c.name}</span>
-                        </label>
-                      ))}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-80 overflow-y-auto">
+                      {corretoresDisp.map((c) => {
+                        const selecionado = corretoresSelecionados.includes(c.id);
+                        const lote = lotesPorCorretor[c.id] ?? loteDefault;
+                        return (
+                          <div key={c.id} className={`flex items-center gap-2 text-sm border rounded px-2 py-1.5 ${selecionado ? "bg-white" : "bg-muted/40"}`}>
+                            <label className="flex items-center gap-2 flex-1 min-w-0 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={selecionado}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setCorretoresSelecionados([...corretoresSelecionados, c.id]);
+                                    if (lotesPorCorretor[c.id] === undefined) {
+                                      setLotesPorCorretor({ ...lotesPorCorretor, [c.id]: loteDefault });
+                                    }
+                                  } else {
+                                    setCorretoresSelecionados(corretoresSelecionados.filter((x) => x !== c.id));
+                                  }
+                                }}
+                              />
+                              <span className="truncate">{c.name}</span>
+                            </label>
+                            <Input
+                              type="number"
+                              min={1}
+                              value={lote}
+                              disabled={!selecionado}
+                              onChange={(e) => {
+                                const v = Math.max(1, parseInt(e.target.value) || 1);
+                                setLotesPorCorretor({ ...lotesPorCorretor, [c.id]: v });
+                              }}
+                              className="h-8 w-20 text-sm"
+                            />
+                            <span className="text-xs text-muted-foreground">leads</span>
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
-                  <p className="text-xs text-muted-foreground">
-                    {corretoresSelecionados.length} corretor(es) selecionado(s). {leadsFinais.length > 0 && corretoresSelecionados.length > 0 && (
-                      <strong>~{Math.ceil(leadsFinais.length / corretoresSelecionados.length)} leads por corretor</strong>
+
+                  <div className={`text-sm rounded p-2 border ${excesso > 0 ? "bg-amber-50 border-amber-200 text-amber-900" : "bg-blue-50 border-blue-200 text-blue-900"}`}>
+                    {corretoresSelecionados.length === 0 ? (
+                      <>Selecione pelo menos um corretor.</>
+                    ) : excesso > 0 ? (
+                      <>Total alocado: <strong>{totalAlocado}</strong> de {leadsFinais.length} leads disponíveis. Excedente: <strong>{excesso}</strong>. Os primeiros {leadsFinais.length} serão distribuídos na ordem, o restante dos lotes fica vazio.</>
+                    ) : (
+                      <>Total alocado: <strong>{totalAlocado}</strong> de {leadsFinais.length} leads. <strong>{sobra}</strong> ficam fora do plantão.</>
                     )}
-                  </p>
+                  </div>
                 </div>
-              )}
+                );
+              })()}
 
               {modo === "automatico" && (
               <div>
