@@ -212,8 +212,9 @@ export default function PlantaoNovo() {
         if (data.length < pageSize) break;
         from += pageSize;
       }
+      const nomeCamp = campanhas.find(c => c.id === campanhaId)?.nome || "";
       leadsDaCampanha = all.map((l: any) => ({
-        id: l.id, nome: l.nome, telefone: l.telefone, email: l.email, campanhaId: l.campanha_id,
+        id: l.id, nome: l.nome, telefone: l.telefone, email: l.email, campanhaId: l.campanha_id, campanha: nomeCamp,
       })) as any;
     }
     const validos: ParsedLead[] = [];

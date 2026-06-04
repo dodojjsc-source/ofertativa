@@ -14,6 +14,7 @@ import { toast } from "@/hooks/use-toast";
 import { Plantao, PlantaoCopy, DisparoFila, DisparoResposta, statusLabel, classifLabel } from "@/types/plantao";
 import { normalizarTelefone } from "@/lib/phoneNormalization";
 import { checarOptoutGlobal } from "@/lib/plantao";
+import { useCampanhas } from "@/contexts/CampanhasContext";
 
 export default function PlantaoDetalhe() {
   const { id } = useParams<{ id: string }>();
@@ -208,42 +209,87 @@ function AdicionarLeadsDialog({
   onAdded: () => void;
 }) {
   type CorretorRow = { id: string; name: string; lote: number };
+  const { campanhas } = useCampanhas();
   const [loading, setLoading] = useState(false);
   const [salvando, setSalvando] = useState(false);
-  const [campanhaNome, setCampanhaNome] = useState<string>("");
+  const [campanhaNomeDetectada, setCampanhaNomeDetectada] = useState<string>("");
   const [campanhaId, setCampanhaId] = useState<string>("");
+  const [origemDetectada, setOrigemDetectada] = useState<string>("");
+  const [jaNaFila, setJaNaFila] = useState<Set<string>>(new Set());
   const [leadsDisponiveis, setLeadsDisponiveis] = useState<{ nome: string; telefone_raw: string; telefone_norm: string; email: string | null }[]>([]);
   const [corretores, setCorretores] = useState<CorretorRow[]>([]);
   const [loteDefault, setLoteDefault] = useState(20);
 
+  const buscarLeadsDaCampanha = useCallback(async (campId: string, jaFila: Set<string>) => {
+    if (!campId) { setLeadsDisponiveis([]); return; }
+    const pageSize = 1000;
+    let from = 0;
+    const all: any[] = [];
+    while (true) {
+      const { data, error } = await (supabase as any)
+        .from("leads")
+        .select("id, nome, telefone, email")
+        .eq("campanha_id", campId)
+        .range(from, from + pageSize - 1);
+      if (error || !data || data.length === 0) break;
+      all.push(...data);
+      if (data.length < pageSize) break;
+      from += pageSize;
+    }
+
+    const vistos = new Set<string>();
+    const validos: { nome: string; telefone_raw: string; telefone_norm: string; email: string | null }[] = [];
+    for (const l of all) {
+      let norm: string | null = null;
+      try {
+        const r = normalizarTelefone(l.telefone);
+        if (r.validacao === "ok") norm = r.e164.replace(/\D/g, "");
+      } catch { /* ignore */ }
+      if (!norm || norm.length < 12 || norm.length > 13) continue;
+      if (jaFila.has(norm) || vistos.has(norm)) continue;
+      vistos.add(norm);
+      validos.push({
+        nome: (l.nome || "").split(" ").slice(0, 3).join(" "),
+        telefone_raw: l.telefone,
+        telefone_norm: norm,
+        email: l.email || null,
+      });
+    }
+
+    if (validos.length > 0) {
+      const opt = await checarOptoutGlobal(validos.map((v) => v.telefone_norm));
+      setLeadsDisponiveis(validos.filter((v) => !opt.has(v.telefone_norm)));
+    } else {
+      setLeadsDisponiveis([]);
+    }
+  }, []);
+
   const carregar = useCallback(async () => {
     setLoading(true);
     try {
-      // 1) Pega 1 row da fila pra extrair origem ("ofertativa:NomeCampanha")
+      // 1) Pega rows da fila pra extrair origem + corretores envolvidos
       const { data: filaRows } = await (supabase as any)
         .from("disparo_fila")
         .select("origem, telefone_norm, corretor_id")
         .eq("plantao_id", plantaoId);
 
       const origem = (filaRows || []).find((r: any) => r?.origem)?.origem || "";
-      const nomeCamp = origem.startsWith("ofertativa:") ? origem.slice("ofertativa:".length) : "";
-      setCampanhaNome(nomeCamp);
+      setOrigemDetectada(origem);
+      const nomeCamp = origem.startsWith("ofertativa:") ? origem.slice("ofertativa:".length).trim() : "";
 
       // Telefones já na fila do plantão
-      const jaNaFila = new Set<string>((filaRows || []).map((r: any) => r.telefone_norm).filter(Boolean));
+      const jaFila = new Set<string>((filaRows || []).map((r: any) => r.telefone_norm).filter(Boolean));
+      setJaNaFila(jaFila);
 
-      // 2) Resolve campanha_id pelo nome
+      // 2) Tenta resolver campanha pelo nome (válido se != "undefined" e existir no contexto)
       let campId = "";
-      if (nomeCamp) {
-        const { data: c } = await (supabase as any)
-          .from("campanhas")
-          .select("id")
-          .eq("nome", nomeCamp)
-          .limit(1)
-          .single();
-        campId = c?.id || "";
+      let nomeOk = "";
+      if (nomeCamp && nomeCamp.toLowerCase() !== "undefined") {
+        const hit = campanhas.find((c) => c.nome === nomeCamp);
+        if (hit) { campId = hit.id; nomeOk = hit.nome; }
       }
       setCampanhaId(campId);
+      setCampanhaNomeDetectada(nomeOk);
 
       // 3) Corretores envolvidos no plantão (atribuídos)
       const corretorIds = Array.from(new Set((filaRows || []).map((r: any) => r.corretor_id).filter(Boolean)));
@@ -252,54 +298,26 @@ function AdicionarLeadsDialog({
         : { data: [] };
       setCorretores((profs || []).map((p: any) => ({ id: p.id, name: p.name, lote: 20 })));
 
-      // 4) Pega leads novos da campanha (paginado), filtra dup + optout
-      let disponiveis: typeof leadsDisponiveis = [];
+      // 4) Se já tem campanha resolvida, busca leads disponíveis
       if (campId) {
-        const pageSize = 1000;
-        let from = 0;
-        const all: any[] = [];
-        while (true) {
-          const { data, error } = await (supabase as any)
-            .from("leads")
-            .select("id, nome, telefone, email")
-            .eq("campanha_id", campId)
-            .range(from, from + pageSize - 1);
-          if (error || !data || data.length === 0) break;
-          all.push(...data);
-          if (data.length < pageSize) break;
-          from += pageSize;
-        }
-
-        const vistos = new Set<string>();
-        const validos: typeof leadsDisponiveis = [];
-        for (const l of all) {
-          let norm: string | null = null;
-          try {
-            const r = normalizarTelefone(l.telefone);
-            if (r.validacao === "ok") norm = r.e164.replace(/\D/g, "");
-          } catch { /* ignore */ }
-          if (!norm || norm.length < 12 || norm.length > 13) continue;
-          if (jaNaFila.has(norm) || vistos.has(norm)) continue;
-          vistos.add(norm);
-          validos.push({
-            nome: (l.nome || "").split(" ").slice(0, 3).join(" "),
-            telefone_raw: l.telefone,
-            telefone_norm: norm,
-            email: l.email || null,
-          });
-        }
-
-        // Cruza optout global
-        if (validos.length > 0) {
-          const opt = await checarOptoutGlobal(validos.map((v) => v.telefone_norm));
-          disponiveis = validos.filter((v) => !opt.has(v.telefone_norm));
-        }
+        await buscarLeadsDaCampanha(campId, jaFila);
+      } else {
+        setLeadsDisponiveis([]);
       }
-      setLeadsDisponiveis(disponiveis);
     } finally {
       setLoading(false);
     }
-  }, [plantaoId]);
+  }, [plantaoId, campanhas, buscarLeadsDaCampanha]);
+
+  const trocarCampanhaManual = async (novoId: string) => {
+    setCampanhaId(novoId);
+    setLoading(true);
+    try {
+      await buscarLeadsDaCampanha(novoId, jaNaFila);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (open) carregar();
@@ -326,7 +344,7 @@ function AdicionarLeadsDialog({
           telefone: l.telefone_raw,
           telefone_norm: l.telefone_norm,
           email: l.email,
-          origem: campanhaNome ? `ofertativa:${campanhaNome}` : null,
+          origem: (campanhas.find((cc) => cc.id === campanhaId)?.nome) ? `ofertativa:${campanhas.find((cc) => cc.id === campanhaId)!.nome}` : null,
           status: "aguardando" as const,
           corretor_id: c.id,
           abordagem_status: "pendente",
@@ -370,12 +388,30 @@ function AdicionarLeadsDialog({
           <div className="py-8 flex justify-center"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
         ) : (
           <div className="space-y-4">
-            <div className="text-sm bg-muted/40 rounded p-3 space-y-1">
-              <div><span className="text-muted-foreground">Campanha origem:</span> <strong>{campanhaNome || "(não detectada)"}</strong></div>
-              <div><span className="text-muted-foreground">Leads disponíveis (novos):</span> <strong>{leadsDisponiveis.length}</strong></div>
-              {!campanhaId && campanhaNome && (
-                <div className="text-amber-700 text-xs">Não consegui encontrar a campanha "{campanhaNome}" em /campanhas. Verifica se ela ainda existe.</div>
+            <div className="text-sm bg-muted/40 rounded p-3 space-y-2">
+              {campanhaNomeDetectada ? (
+                <div><span className="text-muted-foreground">Campanha origem:</span> <strong>{campanhaNomeDetectada}</strong></div>
+              ) : (
+                <div className="space-y-2">
+                  <div className="text-amber-700 text-xs">
+                    {origemDetectada
+                      ? `Origem da fila atual está como "${origemDetectada}" (sem campanha vinculada). Escolha manualmente abaixo.`
+                      : "Não detectei a campanha origem na fila. Escolha manualmente abaixo."}
+                  </div>
+                  <Label className="text-xs">Escolher campanha</Label>
+                  <select
+                    className="w-full border rounded px-3 py-2 text-sm bg-background"
+                    value={campanhaId}
+                    onChange={(e) => trocarCampanhaManual(e.target.value)}
+                  >
+                    <option value="">Selecione uma campanha</option>
+                    {campanhas.map((c) => (
+                      <option key={c.id} value={c.id}>{c.nome}</option>
+                    ))}
+                  </select>
+                </div>
               )}
+              <div><span className="text-muted-foreground">Leads disponíveis (novos):</span> <strong>{leadsDisponiveis.length}</strong></div>
             </div>
 
             {corretores.length === 0 ? (
