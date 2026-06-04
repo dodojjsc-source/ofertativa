@@ -2,14 +2,18 @@ import { Layout } from "@/components/Layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { ArrowLeft, Play, Pause, Square, RefreshCw, Loader2, Send, Eye, MessageSquare, Inbox, FileText, Users, AlertTriangle, Trash2, CheckCircle2, Image as ImageIcon, XCircle, Clock } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { ArrowLeft, Play, Pause, Square, RefreshCw, Loader2, Send, Eye, MessageSquare, Inbox, FileText, Users, AlertTriangle, Trash2, CheckCircle2, Image as ImageIcon, XCircle, Clock, Plus } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import { Plantao, PlantaoCopy, DisparoFila, DisparoResposta, statusLabel, classifLabel } from "@/types/plantao";
+import { normalizarTelefone } from "@/lib/phoneNormalization";
+import { checarOptoutGlobal } from "@/lib/plantao";
 
 export default function PlantaoDetalhe() {
   const { id } = useParams<{ id: string }>();
@@ -20,6 +24,7 @@ export default function PlantaoDetalhe() {
   const [filaSample, setFilaSample] = useState<DisparoFila[]>([]);
   const [respostas, setRespostas] = useState<DisparoResposta[]>([]);
   const [filaCount, setFilaCount] = useState({ aguardando: 0, enviado: 0, falhou: 0 });
+  const [addLeadsOpen, setAddLeadsOpen] = useState(false);
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -92,6 +97,9 @@ export default function PlantaoDetalhe() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={() => setAddLeadsOpen(true)}>
+              <Plus className="mr-1 h-4 w-4" /> Adicionar leads
+            </Button>
             <Button variant="outline" size="sm" onClick={recalcStats}>
               <RefreshCw className="mr-1 h-4 w-4" /> Recalcular
             </Button>
@@ -177,7 +185,262 @@ export default function PlantaoDetalhe() {
           </TabsContent>
         </Tabs>
       </div>
+
+      <AdicionarLeadsDialog
+        open={addLeadsOpen}
+        onOpenChange={setAddLeadsOpen}
+        plantaoId={plantao.id}
+        onAdded={() => { setAddLeadsOpen(false); load(); }}
+      />
     </Layout>
+  );
+}
+
+function AdicionarLeadsDialog({
+  open,
+  onOpenChange,
+  plantaoId,
+  onAdded,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  plantaoId: string;
+  onAdded: () => void;
+}) {
+  type CorretorRow = { id: string; name: string; lote: number };
+  const [loading, setLoading] = useState(false);
+  const [salvando, setSalvando] = useState(false);
+  const [campanhaNome, setCampanhaNome] = useState<string>("");
+  const [campanhaId, setCampanhaId] = useState<string>("");
+  const [leadsDisponiveis, setLeadsDisponiveis] = useState<{ nome: string; telefone_raw: string; telefone_norm: string; email: string | null }[]>([]);
+  const [corretores, setCorretores] = useState<CorretorRow[]>([]);
+  const [loteDefault, setLoteDefault] = useState(20);
+
+  const carregar = useCallback(async () => {
+    setLoading(true);
+    try {
+      // 1) Pega 1 row da fila pra extrair origem ("ofertativa:NomeCampanha")
+      const { data: filaRows } = await (supabase as any)
+        .from("disparo_fila")
+        .select("origem, telefone_norm, corretor_id")
+        .eq("plantao_id", plantaoId);
+
+      const origem = (filaRows || []).find((r: any) => r?.origem)?.origem || "";
+      const nomeCamp = origem.startsWith("ofertativa:") ? origem.slice("ofertativa:".length) : "";
+      setCampanhaNome(nomeCamp);
+
+      // Telefones já na fila do plantão
+      const jaNaFila = new Set<string>((filaRows || []).map((r: any) => r.telefone_norm).filter(Boolean));
+
+      // 2) Resolve campanha_id pelo nome
+      let campId = "";
+      if (nomeCamp) {
+        const { data: c } = await (supabase as any)
+          .from("campanhas")
+          .select("id")
+          .eq("nome", nomeCamp)
+          .limit(1)
+          .single();
+        campId = c?.id || "";
+      }
+      setCampanhaId(campId);
+
+      // 3) Corretores envolvidos no plantão (atribuídos)
+      const corretorIds = Array.from(new Set((filaRows || []).map((r: any) => r.corretor_id).filter(Boolean)));
+      const { data: profs } = corretorIds.length > 0
+        ? await (supabase as any).from("profiles").select("id, name").in("id", corretorIds)
+        : { data: [] };
+      setCorretores((profs || []).map((p: any) => ({ id: p.id, name: p.name, lote: 20 })));
+
+      // 4) Pega leads novos da campanha (paginado), filtra dup + optout
+      let disponiveis: typeof leadsDisponiveis = [];
+      if (campId) {
+        const pageSize = 1000;
+        let from = 0;
+        const all: any[] = [];
+        while (true) {
+          const { data, error } = await (supabase as any)
+            .from("leads")
+            .select("id, nome, telefone, email")
+            .eq("campanha_id", campId)
+            .range(from, from + pageSize - 1);
+          if (error || !data || data.length === 0) break;
+          all.push(...data);
+          if (data.length < pageSize) break;
+          from += pageSize;
+        }
+
+        const vistos = new Set<string>();
+        const validos: typeof leadsDisponiveis = [];
+        for (const l of all) {
+          let norm: string | null = null;
+          try {
+            const r = normalizarTelefone(l.telefone);
+            if (r.validacao === "ok") norm = r.e164.replace(/\D/g, "");
+          } catch { /* ignore */ }
+          if (!norm || norm.length < 12 || norm.length > 13) continue;
+          if (jaNaFila.has(norm) || vistos.has(norm)) continue;
+          vistos.add(norm);
+          validos.push({
+            nome: (l.nome || "").split(" ").slice(0, 3).join(" "),
+            telefone_raw: l.telefone,
+            telefone_norm: norm,
+            email: l.email || null,
+          });
+        }
+
+        // Cruza optout global
+        if (validos.length > 0) {
+          const opt = await checarOptoutGlobal(validos.map((v) => v.telefone_norm));
+          disponiveis = validos.filter((v) => !opt.has(v.telefone_norm));
+        }
+      }
+      setLeadsDisponiveis(disponiveis);
+    } finally {
+      setLoading(false);
+    }
+  }, [plantaoId]);
+
+  useEffect(() => {
+    if (open) carregar();
+  }, [open, carregar]);
+
+  const totalAlocado = corretores.reduce((acc, c) => acc + c.lote, 0);
+  const limiteReal = Math.min(totalAlocado, leadsDisponiveis.length);
+
+  const submit = async () => {
+    if (corretores.length === 0) {
+      toast({ title: "Sem corretores", description: "Esse plantão ainda não tem corretores atribuídos.", variant: "destructive" });
+      return;
+    }
+    setSalvando(true);
+    try {
+      // Distribuição sequencial respeitando lote por corretor
+      let offset = 0;
+      const rows: any[] = [];
+      for (const c of corretores) {
+        const chunk = leadsDisponiveis.slice(offset, offset + c.lote);
+        chunk.forEach((l) => rows.push({
+          plantao_id: plantaoId,
+          nome: l.nome,
+          telefone: l.telefone_raw,
+          telefone_norm: l.telefone_norm,
+          email: l.email,
+          origem: campanhaNome ? `ofertativa:${campanhaNome}` : null,
+          status: "aguardando" as const,
+          corretor_id: c.id,
+          abordagem_status: "pendente",
+        }));
+        offset += c.lote;
+        if (offset >= leadsDisponiveis.length) break;
+      }
+
+      if (rows.length === 0) {
+        toast({ title: "Nada a adicionar", description: "Sem leads disponíveis pra esses corretores." });
+        setSalvando(false);
+        return;
+      }
+
+      const batchSize = 200;
+      for (let i = 0; i < rows.length; i += batchSize) {
+        const { error } = await (supabase as any).from("disparo_fila").insert(rows.slice(i, i + batchSize));
+        if (error) throw error;
+      }
+
+      // Recalcula stats (total_leads, etc) via RPC
+      await (supabase as any).rpc("recalc_plantao_stats", { _plantao_id: plantaoId });
+
+      toast({ title: `${rows.length} leads adicionados` });
+      onAdded();
+    } catch (e: any) {
+      toast({ title: "Erro ao adicionar", description: e.message, variant: "destructive" });
+    } finally {
+      setSalvando(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2"><Plus className="h-5 w-5" /> Adicionar leads ao plantão</DialogTitle>
+        </DialogHeader>
+
+        {loading ? (
+          <div className="py-8 flex justify-center"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
+        ) : (
+          <div className="space-y-4">
+            <div className="text-sm bg-muted/40 rounded p-3 space-y-1">
+              <div><span className="text-muted-foreground">Campanha origem:</span> <strong>{campanhaNome || "(não detectada)"}</strong></div>
+              <div><span className="text-muted-foreground">Leads disponíveis (novos):</span> <strong>{leadsDisponiveis.length}</strong></div>
+              {!campanhaId && campanhaNome && (
+                <div className="text-amber-700 text-xs">Não consegui encontrar a campanha "{campanhaNome}" em /campanhas. Verifica se ela ainda existe.</div>
+              )}
+            </div>
+
+            {corretores.length === 0 ? (
+              <div className="bg-amber-50 border border-amber-200 rounded p-3 text-sm text-amber-900">
+                Nenhum corretor encontrado na fila atual desse plantão.
+              </div>
+            ) : (
+              <>
+                <div className="flex items-end gap-2 bg-white border rounded p-2">
+                  <div className="flex-1">
+                    <Label className="text-xs">Lote padrão por corretor</Label>
+                    <Input
+                      type="number"
+                      min={1}
+                      value={loteDefault}
+                      onChange={(e) => setLoteDefault(Math.max(1, parseInt(e.target.value) || 1))}
+                      className="h-9"
+                    />
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setCorretores(corretores.map((c) => ({ ...c, lote: loteDefault })))}
+                  >
+                    Aplicar a todos
+                  </Button>
+                </div>
+
+                <div className="border rounded divide-y max-h-64 overflow-y-auto">
+                  {corretores.map((c) => (
+                    <div key={c.id} className="flex items-center gap-3 p-2">
+                      <span className="flex-1 text-sm">{c.name}</span>
+                      <Input
+                        type="number"
+                        min={0}
+                        value={c.lote}
+                        onChange={(e) => {
+                          const v = Math.max(0, parseInt(e.target.value) || 0);
+                          setCorretores(corretores.map((x) => x.id === c.id ? { ...x, lote: v } : x));
+                        }}
+                        className="h-8 w-20 text-sm"
+                      />
+                      <span className="text-xs text-muted-foreground">leads</span>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="text-sm rounded p-2 border bg-blue-50 border-blue-200 text-blue-900">
+                  Total a adicionar: <strong>{limiteReal}</strong> de {totalAlocado} pedidos ({leadsDisponiveis.length} disponíveis na campanha).
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={salvando}>Cancelar</Button>
+          <Button onClick={submit} disabled={salvando || loading || limiteReal === 0}>
+            {salvando ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />}
+            Adicionar {limiteReal} leads
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
