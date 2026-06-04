@@ -208,7 +208,10 @@ Deno.serve(async (req) => {
       case "reset-password": {
         const { user_id, password } = body;
         if (!user_id || !password) return json({ error: "user_id and password required" }, 400);
-        const { data, error } = await admin.auth.admin.updateUserById(user_id, { password });
+        const { data, error } = await admin.auth.admin.updateUserById(user_id, {
+          password,
+          email_confirm: true,
+        });
         if (error) throw error;
         return json(data);
       }

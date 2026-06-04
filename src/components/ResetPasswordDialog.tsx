@@ -93,16 +93,17 @@ export function ResetPasswordDialog({ open, onOpenChange, user }: Props) {
     }
     setSalvando(true);
     try {
+      const baseHeaders = {
+        "Content-Type": "application/json",
+        "x-admin-token": ADMIN_TOKEN,
+        Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+        apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+      };
       const resp = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-users/reset-password`,
         {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "x-admin-token": ADMIN_TOKEN,
-            Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-            apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-          },
+          headers: baseHeaders,
           body: JSON.stringify({ user_id: user.id, password: senha }),
         },
       );
@@ -110,6 +111,16 @@ export function ResetPasswordDialog({ open, onOpenChange, user }: Props) {
       if (!resp.ok || data?.error) {
         throw new Error(data?.error || `HTTP ${resp.status}`);
       }
+      // Confirma o e-mail junto: usuário criado por convite sem confirmar
+      // não consegue logar com password, mesmo com senha nova certa.
+      await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-users/confirm-email`,
+        {
+          method: "POST",
+          headers: baseHeaders,
+          body: JSON.stringify({ user_id: user.id }),
+        },
+      ).catch(() => {});
       await handleCopiar();
       toast({
         title: "Senha redefinida",
