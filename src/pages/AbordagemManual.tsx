@@ -40,7 +40,30 @@ export default function AbordagemManual() {
   const [confirmando, setConfirmando] = useState<LeadComPlantao | null>(null);
   const [motivoNaoEnvio, setMotivoNaoEnvio] = useState("");
   const [salvando, setSalvando] = useState(false);
+  const [corretorPrimeiroNomeSlug, setCorretorPrimeiroNomeSlug] = useState<string>("");
   const printRef = useRef<HTMLDivElement>(null);
+
+  const slugify = (txt: string) =>
+    (txt || "")
+      .normalize("NFKD")
+      .replace(/\p{Diacritic}/gu, "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "");
+
+  useEffect(() => {
+    if (!user?.id) return;
+    (async () => {
+      const { data } = await (supabase as any)
+        .from("profiles")
+        .select("name")
+        .eq("id", user.id)
+        .single();
+      const nome = (data?.name || "").trim();
+      const primeiro = nome.split(" ")[0] || "";
+      setCorretorPrimeiroNomeSlug(slugify(primeiro));
+    })();
+  }, [user?.id]);
 
   const load = useCallback(async () => {
     if (!user?.id) return;
@@ -89,7 +112,25 @@ export default function AbordagemManual() {
   }, [load]);
 
   const resolverTexto = (template: string, nome: string) => {
-    let t = template.replace(/\{\{\s*nome\s*\}\}/gi, nome.split(" ")[0] || "");
+    const primeiro = nome.split(" ")[0] || "";
+    const flyerUrl = corretorPrimeiroNomeSlug
+      ? `https://intelbuzz.com.br/flyer-setai/?c=${corretorPrimeiroNomeSlug}`
+      : "https://intelbuzz.com.br/flyer-setai/";
+
+    let t = template
+      .replace(/\{\{\s*primeiro_nome\s*\}\}/gi, primeiro)
+      .replace(/\{\{\s*nome\s*\}\}/gi, primeiro)
+      .replace(/\{\{\s*eflyer\s*\}\}/gi, flyerUrl)
+      .replace(/\{\{\s*flyer\s*\}\}/gi, flyerUrl);
+
+    // Retrofit: copies antigas com URL hardcoded `flyer-setai/?c=xxx` recebem o slug do corretor logado
+    if (corretorPrimeiroNomeSlug) {
+      t = t.replace(
+        /https?:\/\/intelbuzz\.com\.br\/flyer-setai\/\?c=[a-zA-Z0-9-]+/g,
+        flyerUrl,
+      );
+    }
+
     if (complemento.trim()) {
       t += "\n\n" + complemento.trim();
     }
