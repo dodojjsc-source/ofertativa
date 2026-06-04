@@ -390,6 +390,20 @@ function AbordagensView({ plantaoId }: { plantaoId: string }) {
   const pendentes = items.filter((i) => !i.abordagem_status || i.abordagem_status === "pendente").length;
   const taxa = items.length > 0 ? Math.round((enviadas / items.length) * 100) : 0;
 
+  // Produção por corretor envolvido no plantão
+  const porCorretor = items.reduce((acc, i) => {
+    const id = i.corretor_id || "sem";
+    const nome = i.profiles?.name || "Sem corretor";
+    if (!acc[id]) acc[id] = { nome, atribuidos: 0, pendentes: 0, aguardando: 0, enviadas: 0, naoEnviadas: 0 };
+    acc[id].atribuidos++;
+    if (i.abordagem_status === "enviou") acc[id].enviadas++;
+    else if (i.abordagem_status === "nao_enviou") acc[id].naoEnviadas++;
+    else if (i.abordagem_status === "abriu_wa") acc[id].aguardando++;
+    else acc[id].pendentes++;
+    return acc;
+  }, {} as Record<string, { nome: string; atribuidos: number; pendentes: number; aguardando: number; enviadas: number; naoEnviadas: number }>);
+  const ranking = Object.values(porCorretor).sort((a, b) => b.enviadas - a.enviadas || b.atribuidos - a.atribuidos);
+
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
@@ -399,6 +413,53 @@ function AbordagensView({ plantaoId }: { plantaoId: string }) {
         <Kpi label="Enviadas" value={enviadas} color="text-green-600" />
         <Kpi label="Taxa envio" value={taxa as any} color="text-primary" />
       </div>
+
+      {ranking.length > 0 && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm flex items-center gap-2">
+              <Users className="h-4 w-4" /> Produção por corretor
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            <table className="w-full text-sm">
+              <thead className="text-xs text-muted-foreground uppercase bg-muted/40">
+                <tr>
+                  <th className="text-left p-3">Corretor</th>
+                  <th className="text-right p-3">Atrib.</th>
+                  <th className="text-right p-3">Pendentes</th>
+                  <th className="text-right p-3">Aguardando</th>
+                  <th className="text-right p-3">Enviadas</th>
+                  <th className="text-right p-3">Não enviou</th>
+                  <th className="text-right p-3">Taxa</th>
+                  <th className="p-3 w-32">Progresso</th>
+                </tr>
+              </thead>
+              <tbody>
+                {ranking.map((c, idx) => {
+                  const taxaC = c.atribuidos > 0 ? Math.round((c.enviadas / c.atribuidos) * 100) : 0;
+                  return (
+                    <tr key={c.nome + idx} className="border-t border-border">
+                      <td className="p-3 font-medium">{c.nome}</td>
+                      <td className="p-3 text-right font-mono">{c.atribuidos}</td>
+                      <td className="p-3 text-right font-mono text-amber-600">{c.pendentes}</td>
+                      <td className="p-3 text-right font-mono text-blue-600">{c.aguardando}</td>
+                      <td className="p-3 text-right font-mono text-green-600 font-bold">{c.enviadas}</td>
+                      <td className="p-3 text-right font-mono text-red-600">{c.naoEnviadas}</td>
+                      <td className="p-3 text-right font-mono font-bold">{taxaC}%</td>
+                      <td className="p-3">
+                        <div className="h-2 bg-muted rounded overflow-hidden">
+                          <div className="h-full bg-green-600" style={{ width: `${taxaC}%` }} />
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardContent className="p-0">
