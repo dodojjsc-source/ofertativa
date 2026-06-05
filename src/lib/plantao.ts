@@ -111,6 +111,42 @@ export async function checarOptoutGlobal(telefones_norm: string[]): Promise<Set<
   return new Set((data || []).map((r: any) => r.telefone));
 }
 
+// Telefones que já foram trabalhados em algum lugar:
+// 1) qualquer plantão (disparo_fila), independente de status
+// 2) Oferta Ativa legacy (leads.corretor_id NOT NULL)
+// Filtro silencioso: o dedup é por telefone, não por campanha.
+export async function checarJaDistribuidos(telefones_norm: string[]): Promise<Set<string>> {
+  if (telefones_norm.length === 0) return new Set();
+  const queimados = new Set<string>();
+
+  // Em batches pra evitar URL gigante em "in" do PostgREST
+  const batchSize = 500;
+  for (let i = 0; i < telefones_norm.length; i += batchSize) {
+    const chunk = telefones_norm.slice(i, i + batchSize);
+
+    const chunkE164 = chunk.map((t) => "+" + t); // leads.e164 vem com prefixo "+"
+
+    const [fila, legacy] = await Promise.all([
+      (supabase as any)
+        .from("disparo_fila")
+        .select("telefone_norm")
+        .in("telefone_norm", chunk),
+      (supabase as any)
+        .from("leads")
+        .select("e164")
+        .not("corretor_id", "is", null)
+        .in("e164", chunkE164),
+    ]);
+    (fila.data || []).forEach((r: any) => { if (r.telefone_norm) queimados.add(r.telefone_norm); });
+    (legacy.data || []).forEach((r: any) => {
+      const digits = (r.e164 || "").replace(/\D/g, "");
+      if (digits) queimados.add(digits);
+    });
+  }
+
+  return queimados;
+}
+
 export function primeiroNome(s: string): string {
   return (s || "").split(/\s+/)[0] || "";
 }

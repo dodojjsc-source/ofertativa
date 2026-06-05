@@ -13,7 +13,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import { Plantao, PlantaoCopy, DisparoFila, DisparoResposta, statusLabel, classifLabel } from "@/types/plantao";
 import { normalizarTelefone } from "@/lib/phoneNormalization";
-import { checarOptoutGlobal } from "@/lib/plantao";
+import { checarOptoutGlobal, checarJaDistribuidos } from "@/lib/plantao";
 import { useCampanhas } from "@/contexts/CampanhasContext";
 
 export default function PlantaoDetalhe() {
@@ -257,8 +257,14 @@ function AdicionarLeadsDialog({
     }
 
     if (validos.length > 0) {
-      const opt = await checarOptoutGlobal(validos.map((v) => v.telefone_norm));
-      setLeadsDisponiveis(validos.filter((v) => !opt.has(v.telefone_norm)));
+      const nums = validos.map((v) => v.telefone_norm);
+      const [opt, distribuidos] = await Promise.all([
+        checarOptoutGlobal(nums),
+        checarJaDistribuidos(nums),
+      ]);
+      setLeadsDisponiveis(
+        validos.filter((v) => !opt.has(v.telefone_norm) && !distribuidos.has(v.telefone_norm)),
+      );
     } else {
       setLeadsDisponiveis([]);
     }

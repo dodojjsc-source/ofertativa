@@ -11,7 +11,7 @@ import { useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
-import { parseCsvText, ParseResult, ParsedLead, checarOptoutGlobal, validarCopy, COPY_OPTOUT_LINE } from "@/lib/plantao";
+import { parseCsvText, ParseResult, ParsedLead, checarOptoutGlobal, checarJaDistribuidos, validarCopy, COPY_OPTOUT_LINE } from "@/lib/plantao";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCampanhas } from "@/contexts/CampanhasContext";
 import { useLeads } from "@/contexts/LeadsContext";
@@ -53,6 +53,7 @@ export default function PlantaoNovo() {
   const [csvText, setCsvText] = useState("");
   const [parseRes, setParseRes] = useState<ParseResult | null>(null);
   const [optoutCruzados, setOptoutCruzados] = useState<Set<string>>(new Set());
+  const [jaDistribuidos, setJaDistribuidos] = useState<Set<string>>(new Set());
   const [leadsFinais, setLeadsFinais] = useState<ParsedLead[]>([]);
 
   // Plantões existentes (pra importar copies)
@@ -171,9 +172,16 @@ export default function PlantaoNovo() {
     const r = parseCsvText(texto);
     setParseRes(r);
     if (r.validos.length > 0) {
-      const optout = await checarOptoutGlobal(r.validos.map(v => v.telefone_norm!).filter(Boolean));
+      const nums = r.validos.map(v => v.telefone_norm!).filter(Boolean);
+      const [optout, distribuidos] = await Promise.all([
+        checarOptoutGlobal(nums),
+        checarJaDistribuidos(nums),
+      ]);
       setOptoutCruzados(optout);
-      setLeadsFinais(r.validos.filter(v => !optout.has(v.telefone_norm!)));
+      setJaDistribuidos(distribuidos);
+      setLeadsFinais(
+        r.validos.filter(v => !optout.has(v.telefone_norm!) && !distribuidos.has(v.telefone_norm!)),
+      );
     } else {
       setLeadsFinais([]);
     }
@@ -191,6 +199,7 @@ export default function PlantaoNovo() {
       setParseRes(null);
       setLeadsFinais([]);
       setOptoutCruzados(new Set());
+      setJaDistribuidos(new Set());
       return;
     }
 
@@ -248,9 +257,16 @@ export default function PlantaoNovo() {
     const r: ParseResult = { total_brutos: leadsDaCampanha.length, validos, descartados, duplicados_arquivo: duplicados };
     setParseRes(r);
     if (validos.length > 0) {
-      const optout = await checarOptoutGlobal(validos.map(v => v.telefone_norm!).filter(Boolean));
+      const nums = validos.map(v => v.telefone_norm!).filter(Boolean);
+      const [optout, distribuidos] = await Promise.all([
+        checarOptoutGlobal(nums),
+        checarJaDistribuidos(nums),
+      ]);
       setOptoutCruzados(optout);
-      setLeadsFinais(validos.filter(v => !optout.has(v.telefone_norm!)));
+      setJaDistribuidos(distribuidos);
+      setLeadsFinais(
+        validos.filter(v => !optout.has(v.telefone_norm!) && !distribuidos.has(v.telefone_norm!)),
+      );
     } else {
       setLeadsFinais([]);
     }
@@ -532,11 +548,12 @@ export default function PlantaoNovo() {
               )}
 
               {parseRes && (
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
                   <Stat label="Brutos" value={parseRes.total_brutos} />
                   <Stat label="Válidos" value={parseRes.validos.length} good />
                   <Stat label="Descartados" value={parseRes.descartados.length + parseRes.duplicados_arquivo} warn />
                   <Stat label="Opt-out (cortados)" value={optoutCruzados.size} warn />
+                  <Stat label="Já trabalhados (cortados)" value={jaDistribuidos.size} warn />
                 </div>
               )}
               {leadsFinais.length > 0 && (

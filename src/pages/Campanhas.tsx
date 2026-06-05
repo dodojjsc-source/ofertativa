@@ -8,7 +8,7 @@ import { useCampanhas } from "@/contexts/CampanhasContext";
 import { useLeads } from "@/contexts/LeadsContext";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { DistribuirLoteDialog } from "@/components/campanhas/DistribuirLoteDialog";
 import { EditarCampanhaDialog } from "@/components/campanhas/EditarCampanhaDialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -30,19 +30,46 @@ export default function Campanhas() {
   const [campanhaParaEditar, setCampanhaParaEditar] = useState<{ id: string; nome: string } | null>(null);
   const [modalEdicaoAberto, setModalEdicaoAberto] = useState(false);
   const [campanhaParaDeletar, setCampanhaParaDeletar] = useState<string | null>(null);
+  const [filaTelSet, setFilaTelSet] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    (async () => {
+      // Carrega todos os telefones em qualquer plantão (paginado)
+      const all = new Set<string>();
+      const pageSize = 1000;
+      let from = 0;
+      while (true) {
+        const { data, error } = await (supabase as any)
+          .from("disparo_fila")
+          .select("telefone_norm")
+          .range(from, from + pageSize - 1);
+        if (error || !data || data.length === 0) break;
+        data.forEach((r: any) => { if (r.telefone_norm) all.add(r.telefone_norm); });
+        if (data.length < pageSize) break;
+        from += pageSize;
+      }
+      setFilaTelSet(all);
+    })();
+  }, []);
 
   const getCampanhaStats = (campanhaId: string) => {
     const campanhaLeads = leads.filter(l => l.campanhaId === campanhaId);
     const totalLeads = campanhaLeads.length;
     const atendidos = campanhaLeads.filter(l => l.status === "atendido").length;
-    // Disponíveis: sem corretor E que sejam realmente pendentes (exclui atendidos e nao_atendidos)
-    const disponiveis = campanhaLeads.filter(l => 
-      !l.corretorId && 
-      l.status === "pendente" // Apenas leads realmente pendentes
-    ).length;
+    // Já em algum plantão (cruzamento por e164 sem o +)
+    const emPlantao = campanhaLeads.filter(l => {
+      const digits = (l.e164 || "").replace(/\D/g, "");
+      return digits && filaTelSet.has(digits);
+    }).length;
+    // Disponíveis: sem corretor legacy E pendente E NÃO em plantão
+    const disponiveis = campanhaLeads.filter(l => {
+      const digits = (l.e164 || "").replace(/\D/g, "");
+      const emFila = digits && filaTelSet.has(digits);
+      return !l.corretorId && l.status === "pendente" && !emFila;
+    }).length;
     const progresso = totalLeads > 0 ? ((atendidos / totalLeads) * 100).toFixed(0) : "0";
-    
-    return { totalLeads, atendidos, disponiveis, progresso };
+
+    return { totalLeads, atendidos, disponiveis, emPlantao, progresso };
   };
 
   const abrirModalDistribuicao = (campanha: any, stats: ReturnType<typeof getCampanhaStats>) => {
@@ -102,6 +129,7 @@ export default function Campanhas() {
                   <TableHead>Nome</TableHead>
                   <TableHead>Total de Leads</TableHead>
                   <TableHead>Disponíveis</TableHead>
+                  <TableHead>Em plantão</TableHead>
                   <TableHead>Atendidos</TableHead>
                   <TableHead>Progresso</TableHead>
                   <TableHead className="text-right">Ações</TableHead>
@@ -110,13 +138,13 @@ export default function Campanhas() {
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                       Carregando campanhas...
                     </TableCell>
                   </TableRow>
                 ) : campanhas.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center py-8">
+                    <TableCell colSpan={7} className="text-center py-8">
                       <div className="flex flex-col items-center gap-2">
                         <PackageOpen className="h-12 w-12 text-muted-foreground" />
                         <p className="text-muted-foreground">Nenhuma campanha cadastrada</p>
@@ -138,6 +166,15 @@ export default function Campanhas() {
                           {stats.disponiveis > 0 ? (
                             <Badge variant="outline" className="bg-accent/10">
                               {stats.disponiveis} disponíveis
+                            </Badge>
+                          ) : (
+                            <span className="text-muted-foreground">0</span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {stats.emPlantao > 0 ? (
+                            <Badge variant="outline" className="bg-amber-50 text-amber-800 border-amber-300">
+                              {stats.emPlantao}
                             </Badge>
                           ) : (
                             <span className="text-muted-foreground">0</span>
