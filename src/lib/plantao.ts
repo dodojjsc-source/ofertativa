@@ -112,21 +112,22 @@ export async function checarOptoutGlobal(telefones_norm: string[]): Promise<Set<
 }
 
 // Telefones que já foram trabalhados em algum lugar:
-// 1) qualquer plantão (disparo_fila), independente de status
-// 2) Oferta Ativa legacy (leads.corretor_id NOT NULL)
+// 1) qualquer plantão (disparo_fila), independente de status → sempre bloqueia
+// 2) Oferta Ativa legacy (leads): SÓ bloqueia se houve interação real
+//    (status atendido/nao_atendido OU tentativas_contato > 0). Só ter corretor
+//    designado não conta, porque a distribuição legacy joga corretor_id em massa
+//    mesmo em leads que ninguém nunca ligou.
 // Filtro silencioso: o dedup é por telefone, não por campanha.
 export async function checarJaDistribuidos(telefones_norm: string[]): Promise<Set<string>> {
   if (telefones_norm.length === 0) return new Set();
   const queimados = new Set<string>();
 
-  // Em batches pra evitar URL gigante em "in" do PostgREST
   const batchSize = 500;
   for (let i = 0; i < telefones_norm.length; i += batchSize) {
     const chunk = telefones_norm.slice(i, i + batchSize);
-
     const chunkE164 = chunk.map((t) => "+" + t); // leads.e164 vem com prefixo "+"
 
-    const [fila, legacy] = await Promise.all([
+    const [fila, legacyContato, legacyTentativas] = await Promise.all([
       (supabase as any)
         .from("disparo_fila")
         .select("telefone_norm")
@@ -134,11 +135,20 @@ export async function checarJaDistribuidos(telefones_norm: string[]): Promise<Se
       (supabase as any)
         .from("leads")
         .select("e164")
-        .not("corretor_id", "is", null)
+        .in("status", ["atendido", "nao_atendido"])
+        .in("e164", chunkE164),
+      (supabase as any)
+        .from("leads")
+        .select("e164")
+        .gt("tentativas_contato", 0)
         .in("e164", chunkE164),
     ]);
     (fila.data || []).forEach((r: any) => { if (r.telefone_norm) queimados.add(r.telefone_norm); });
-    (legacy.data || []).forEach((r: any) => {
+    (legacyContato.data || []).forEach((r: any) => {
+      const digits = (r.e164 || "").replace(/\D/g, "");
+      if (digits) queimados.add(digits);
+    });
+    (legacyTentativas.data || []).forEach((r: any) => {
       const digits = (r.e164 || "").replace(/\D/g, "");
       if (digits) queimados.add(digits);
     });

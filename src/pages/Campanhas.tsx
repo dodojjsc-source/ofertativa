@@ -61,11 +61,14 @@ export default function Campanhas() {
       const digits = (l.e164 || "").replace(/\D/g, "");
       return digits && filaTelSet.has(digits);
     }).length;
-    // Disponíveis: sem corretor legacy E pendente E NÃO em plantão
+    // Disponíveis: ainda não houve interação real (pendente + 0 tentativas) E NÃO em plantão.
+    // OBS: ter corretor_id setado em legacy não bloqueia, porque o Upload joga em massa
+    // sem necessariamente significar que alguém ligou.
     const disponiveis = campanhaLeads.filter(l => {
       const digits = (l.e164 || "").replace(/\D/g, "");
       const emFila = digits && filaTelSet.has(digits);
-      return !l.corretorId && l.status === "pendente" && !emFila;
+      const semContato = l.status === "pendente" && (l.tentativasContato || 0) === 0;
+      return semContato && !emFila;
     }).length;
     const progresso = totalLeads > 0 ? ((atendidos / totalLeads) * 100).toFixed(0) : "0";
 
