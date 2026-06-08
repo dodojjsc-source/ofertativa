@@ -41,7 +41,7 @@ export default function PlantaoDetalhe() {
     if (!id) return;
     const [p, c, fc, fs, r, o2] = await Promise.all([
       (supabase as any).from("disparo_plantoes").select("*").eq("id", id).single(),
-      (supabase as any).from("disparo_copies").select("*").eq("plantao_id", id).order("fase").order("ordem"),
+      (supabase as any).from("disparo_copies").select("*").eq("plantao_id", id).order("ordem"),
       (supabase as any).from("disparo_fila").select("status").eq("plantao_id", id),
       (supabase as any).from("disparo_fila").select("*").eq("plantao_id", id).order("updated_at", { ascending: false }).limit(30),
       (supabase as any).from("disparo_respostas").select("*").eq("plantao_id", id).order("recebido_em", { ascending: false }).limit(50),

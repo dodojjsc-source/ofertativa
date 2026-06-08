@@ -113,7 +113,6 @@ export default function AbordagemManual() {
         .select("*")
         .in("plantao_id", plantaoIds)
         .eq("ativa", true)
-        .order("fase")
         .order("ordem");
       const agrup: Record<string, PlantaoCopy[]> = {};
       (copies || []).forEach((c: PlantaoCopy) => {
