@@ -215,12 +215,11 @@ function AdicionarLeadsDialog({
   const [campanhaNomeDetectada, setCampanhaNomeDetectada] = useState<string>("");
   const [campanhaId, setCampanhaId] = useState<string>("");
   const [origemDetectada, setOrigemDetectada] = useState<string>("");
-  const [jaNaFila, setJaNaFila] = useState<Set<string>>(new Set());
   const [leadsDisponiveis, setLeadsDisponiveis] = useState<{ nome: string; telefone_raw: string; telefone_norm: string; email: string | null }[]>([]);
   const [corretores, setCorretores] = useState<CorretorRow[]>([]);
   const [loteDefault, setLoteDefault] = useState(20);
 
-  const buscarLeadsDaCampanha = useCallback(async (campId: string, jaFila: Set<string>) => {
+  const buscarLeadsDaCampanha = useCallback(async (campId: string) => {
     if (!campId) { setLeadsDisponiveis([]); return; }
     const pageSize = 1000;
     let from = 0;
@@ -251,7 +250,10 @@ function AdicionarLeadsDialog({
         if (r.validacao === "ok") norm = r.e164.replace(/\D/g, "");
       } catch { /* ignore */ }
       if (!norm || norm.length < 12 || norm.length > 13) continue;
-      if (jaFila.has(norm) || vistos.has(norm)) continue;
+      // jaFila ja eh subconjunto de disparo_fila, entao checarJaDistribuidos abaixo
+      // cobre tudo. Pre-filtrar jaFila aqui causava divergencia entre modais (numero
+      // diferente por plantao pra mesma campanha) sem ganho real.
+      if (vistos.has(norm)) continue;
       vistos.add(norm);
       validos.push({
         nome: (l.nome || "").split(" ").slice(0, 3).join(" "),
@@ -288,10 +290,6 @@ function AdicionarLeadsDialog({
       setOrigemDetectada(origem);
       const nomeCamp = origem.startsWith("ofertativa:") ? origem.slice("ofertativa:".length).trim() : "";
 
-      // Telefones já na fila do plantão
-      const jaFila = new Set<string>((filaRows || []).map((r: any) => r.telefone_norm).filter(Boolean));
-      setJaNaFila(jaFila);
-
       // 2) Tenta resolver campanha pelo nome (válido se != "undefined" e existir no contexto)
       let campId = "";
       let nomeOk = "";
@@ -311,7 +309,7 @@ function AdicionarLeadsDialog({
 
       // 4) Se já tem campanha resolvida, busca leads disponíveis
       if (campId) {
-        await buscarLeadsDaCampanha(campId, jaFila);
+        await buscarLeadsDaCampanha(campId);
       } else {
         setLeadsDisponiveis([]);
       }
@@ -324,7 +322,7 @@ function AdicionarLeadsDialog({
     setCampanhaId(novoId);
     setLoading(true);
     try {
-      await buscarLeadsDaCampanha(novoId, jaNaFila);
+      await buscarLeadsDaCampanha(novoId);
     } finally {
       setLoading(false);
     }
