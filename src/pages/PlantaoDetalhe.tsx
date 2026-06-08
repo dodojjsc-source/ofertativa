@@ -226,17 +226,18 @@ function AdicionarLeadsDialog({
     let from = 0;
     const all: any[] = [];
     // Alinhado com Campanhas.tsx > getCampanhaStats: "disponível" = pendente + 0 tentativas.
-    // Tratamos tentativas_contato null como 0 (legado novo nunca tocado).
+    // status filtrado no servidor; tentativas_contato (que pode ser null) filtrado no client.
     while (true) {
       const { data, error } = await (supabase as any)
         .from("leads")
-        .select("id, nome, telefone, email")
+        .select("id, nome, telefone, email, tentativas_contato")
         .eq("campanha_id", campId)
         .eq("status", "pendente")
-        .or("tentativas_contato.eq.0,tentativas_contato.is.null")
         .range(from, from + pageSize - 1);
       if (error || !data || data.length === 0) break;
-      all.push(...data);
+      for (const row of data) {
+        if ((row.tentativas_contato || 0) === 0) all.push(row);
+      }
       if (data.length < pageSize) break;
       from += pageSize;
     }
