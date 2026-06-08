@@ -6,7 +6,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { ArrowLeft, Play, Pause, Square, RefreshCw, Loader2, Send, Eye, MessageSquare, Inbox, FileText, Users, AlertTriangle, Trash2, CheckCircle2, Image as ImageIcon, XCircle, Clock, Plus } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { Textarea } from "@/components/ui/textarea";
+import { ArrowLeft, Play, Pause, Square, RefreshCw, Loader2, Send, Eye, MessageSquare, Inbox, FileText, Users, AlertTriangle, Trash2, CheckCircle2, Image as ImageIcon, XCircle, Clock, Plus, MoreVertical, Pencil } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -26,6 +29,12 @@ export default function PlantaoDetalhe() {
   const [respostas, setRespostas] = useState<DisparoResposta[]>([]);
   const [filaCount, setFilaCount] = useState({ aguardando: 0, enviado: 0, falhou: 0 });
   const [addLeadsOpen, setAddLeadsOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [editNome, setEditNome] = useState("");
+  const [editDescricao, setEditDescricao] = useState("");
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deletingPlantao, setDeletingPlantao] = useState(false);
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -65,6 +74,51 @@ export default function PlantaoDetalhe() {
       toast({ title: `Plantão ${novo}` });
       load();
     }
+  };
+
+  const abrirEdicao = () => {
+    if (!plantao) return;
+    setEditNome(plantao.nome);
+    setEditDescricao(plantao.descricao || "");
+    setEditOpen(true);
+  };
+
+  const salvarEdicao = async () => {
+    if (!plantao) return;
+    const nome = editNome.trim();
+    if (!nome) {
+      toast({ title: "Nome obrigatório", variant: "destructive" });
+      return;
+    }
+    setSavingEdit(true);
+    const { error } = await (supabase as any)
+      .from("disparo_plantoes")
+      .update({ nome, descricao: editDescricao.trim() || null })
+      .eq("id", plantao.id);
+    setSavingEdit(false);
+    if (error) {
+      toast({ title: "Erro ao salvar", description: error.message, variant: "destructive" });
+      return;
+    }
+    toast({ title: "Plantão atualizado" });
+    setEditOpen(false);
+    load();
+  };
+
+  const excluirPlantao = async () => {
+    if (!plantao) return;
+    setDeletingPlantao(true);
+    const { error } = await (supabase as any)
+      .from("disparo_plantoes")
+      .delete()
+      .eq("id", plantao.id);
+    setDeletingPlantao(false);
+    if (error) {
+      toast({ title: "Erro ao excluir", description: error.message, variant: "destructive" });
+      return;
+    }
+    toast({ title: "Plantão excluído" });
+    navigate("/plantao");
   };
 
   const recalcStats = async () => {
@@ -119,8 +173,72 @@ export default function PlantaoDetalhe() {
                 <Square className="mr-1 h-4 w-4" /> Encerrar
               </Button>
             )}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="icon" aria-label="Mais opções">
+                  <MoreVertical className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={abrirEdicao}>
+                  <Pencil className="mr-2 h-4 w-4" /> Editar plantão
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => setDeleteOpen(true)} className="text-destructive focus:text-destructive">
+                  <Trash2 className="mr-2 h-4 w-4" /> Excluir plantão
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
+
+        <Dialog open={editOpen} onOpenChange={setEditOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2"><Pencil className="h-5 w-5" /> Editar plantão</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="edit-nome">Nome</Label>
+                <Input id="edit-nome" value={editNome} onChange={(e) => setEditNome(e.target.value)} disabled={savingEdit} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-descricao">Descrição</Label>
+                <Textarea id="edit-descricao" value={editDescricao} onChange={(e) => setEditDescricao(e.target.value)} rows={3} disabled={savingEdit} />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setEditOpen(false)} disabled={savingEdit}>Cancelar</Button>
+              <Button onClick={salvarEdicao} disabled={savingEdit || !editNome.trim()}>
+                {savingEdit ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : null}
+                Salvar
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Excluir plantão "{plantao.nome}"?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Apaga o plantão e todos os dados relacionados (fila de disparo, copies, respostas, handoffs).
+                Os leads originais da campanha continuam intactos. Esta ação não pode ser desfeita.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={deletingPlantao}>Cancelar</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={(e) => { e.preventDefault(); excluirPlantao(); }}
+                disabled={deletingPlantao}
+                className="bg-destructive hover:bg-destructive/90"
+              >
+                {deletingPlantao ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Trash2 className="mr-1 h-4 w-4" />}
+                Excluir
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
 
         <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
           <Kpi label="Leads" value={plantao.total_leads} />
