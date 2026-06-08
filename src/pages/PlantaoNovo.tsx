@@ -548,21 +548,30 @@ export default function PlantaoNovo() {
               )}
 
               {parseRes && (
-                <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-                  <Stat label="Brutos" value={parseRes.total_brutos} />
-                  <Stat label="Válidos" value={parseRes.validos.length} good />
-                  <Stat label="Descartados" value={parseRes.descartados.length + parseRes.duplicados_arquivo} warn />
-                  <Stat label="Opt-out (cortados)" value={optoutCruzados.size} warn />
-                  <Stat label="Já trabalhados (cortados)" value={jaDistribuidos.size} warn />
-                </div>
-              )}
-              {leadsFinais.length > 0 && (
-                <div className="border border-green-200 bg-green-50 rounded p-3">
-                  <p className="text-sm font-bold text-green-800 flex items-center gap-2">
-                    <Check className="h-4 w-4" /> {leadsFinais.length} leads prontos pra disparo
-                  </p>
-                  <p className="text-xs text-green-700 mt-1">Amostra: {leadsFinais.slice(0, 3).map(l => l.nome).join(", ")}...</p>
-                </div>
+                <>
+                  <div className={`border rounded p-4 ${leadsFinais.length > 0 ? "border-green-300 bg-green-50" : "border-red-300 bg-red-50"}`}>
+                    <p className="text-xs text-muted-foreground uppercase tracking-wide">Disponíveis pra disparo (após todos os cortes)</p>
+                    <p className={`text-4xl font-bold ${leadsFinais.length > 0 ? "text-green-700" : "text-red-700"}`}>
+                      {leadsFinais.length}
+                    </p>
+                    {leadsFinais.length === 0 ? (
+                      <p className="text-xs text-red-700 mt-1">
+                        Toda a base já foi trabalhada em outro plantão, está em opt-out ou tem telefone inválido. Escolha outra campanha ou suba uma nova base.
+                      </p>
+                    ) : (
+                      <p className="text-xs text-green-700 mt-1">
+                        Amostra: {leadsFinais.slice(0, 3).map(l => l.nome).join(", ")}...
+                      </p>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                    <Stat label="Brutos" value={parseRes.total_brutos} />
+                    <Stat label="Válidos" value={parseRes.validos.length} good />
+                    <Stat label="Descartados" value={parseRes.descartados.length + parseRes.duplicados_arquivo} warn />
+                    <Stat label="Opt-out (cortados)" value={optoutCruzados.size} warn />
+                    <Stat label="Já trabalhados (cortados)" value={jaDistribuidos.size} warn />
+                  </div>
+                </>
               )}
               {parseRes && parseRes.descartados.length > 0 && (
                 <div className="border border-amber-200 bg-amber-50 rounded p-3">
