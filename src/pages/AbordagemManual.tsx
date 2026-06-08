@@ -423,7 +423,7 @@ export default function AbordagemManual() {
                                 }}
                               >
                                 <MessageCircle className="mr-1 h-4 w-4" />
-                                Abordar
+                                {copies1.length === 0 ? "Sem copy cadastrada" : "Abordar"}
                               </Button>
                             )}
                           </div>
