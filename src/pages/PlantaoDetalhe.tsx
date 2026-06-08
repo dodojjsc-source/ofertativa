@@ -28,6 +28,7 @@ export default function PlantaoDetalhe() {
   const [filaSample, setFilaSample] = useState<DisparoFila[]>([]);
   const [respostas, setRespostas] = useState<DisparoResposta[]>([]);
   const [filaCount, setFilaCount] = useState({ aguardando: 0, enviado: 0, falhou: 0 });
+  const [onda2Count, setOnda2Count] = useState({ pendente: 0, enviada: 0 });
   const [addLeadsOpen, setAddLeadsOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [editNome, setEditNome] = useState("");
@@ -38,12 +39,13 @@ export default function PlantaoDetalhe() {
 
   const load = useCallback(async () => {
     if (!id) return;
-    const [p, c, fc, fs, r] = await Promise.all([
+    const [p, c, fc, fs, r, o2] = await Promise.all([
       (supabase as any).from("disparo_plantoes").select("*").eq("id", id).single(),
-      (supabase as any).from("disparo_copies").select("*").eq("plantao_id", id).order("ordem"),
+      (supabase as any).from("disparo_copies").select("*").eq("plantao_id", id).order("fase").order("ordem"),
       (supabase as any).from("disparo_fila").select("status").eq("plantao_id", id),
       (supabase as any).from("disparo_fila").select("*").eq("plantao_id", id).order("updated_at", { ascending: false }).limit(30),
       (supabase as any).from("disparo_respostas").select("*").eq("plantao_id", id).order("recebido_em", { ascending: false }).limit(50),
+      (supabase as any).from("disparo_fila").select("msg2_status, msg2_confirmado_em, msg2_pronto_em").eq("plantao_id", id).not("msg2_pronto_em", "is", null),
     ]);
     if (p.data) setPlantao(p.data as Plantao);
     setCopies((c.data || []) as PlantaoCopy[]);
@@ -52,6 +54,12 @@ export default function PlantaoDetalhe() {
     const cnt = { aguardando: 0, enviado: 0, falhou: 0 } as any;
     (fc.data || []).forEach((row: any) => { cnt[row.status] = (cnt[row.status] || 0) + 1; });
     setFilaCount(cnt);
+    const o2cnt = { pendente: 0, enviada: 0 };
+    (o2.data || []).forEach((row: any) => {
+      if (row.msg2_status === "enviou") o2cnt.enviada++;
+      else if (row.msg2_confirmado_em === null) o2cnt.pendente++;
+    });
+    setOnda2Count(o2cnt);
     setLoading(false);
   }, [id]);
 
@@ -240,13 +248,14 @@ export default function PlantaoDetalhe() {
           </AlertDialogContent>
         </AlertDialog>
 
-        <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-7 gap-3">
           <Kpi label="Leads" value={plantao.total_leads} />
           <Kpi label="Enviados" value={plantao.total_enviados} color="text-blue-600" />
           <Kpi label="Entregues" value={plantao.total_entregues} color="text-emerald-600" />
           <Kpi label="Lidos" value={plantao.total_lidos} color="text-indigo-600" />
           <Kpi label="Respostas" value={plantao.total_respostas} color="text-purple-600" />
           <Kpi label="Opt-out" value={plantao.total_optout} color={plantao.total_enviados > 0 && plantao.total_optout / plantao.total_enviados > 0.05 ? "text-red-600" : ""} />
+          <Kpi label="Onda 2 pendentes" value={onda2Count.pendente} color={onda2Count.pendente > 0 ? "text-amber-700" : ""} />
         </div>
 
         <Card>
@@ -274,6 +283,7 @@ export default function PlantaoDetalhe() {
             <TabsTrigger value="handoff"><Users className="mr-1 h-4 w-4" /> Handoff</TabsTrigger>
             <TabsTrigger value="copies"><FileText className="mr-1 h-4 w-4" /> Copies ({copies.length})</TabsTrigger>
             <TabsTrigger value="fila"><MessageSquare className="mr-1 h-4 w-4" /> Fila ({filaSample.length})</TabsTrigger>
+            <TabsTrigger value="onda2"><Clock className="mr-1 h-4 w-4" /> Onda 2 ({onda2Count.pendente})</TabsTrigger>
             <TabsTrigger value="config"><Eye className="mr-1 h-4 w-4" /> Config</TabsTrigger>
           </TabsList>
 
@@ -292,11 +302,15 @@ export default function PlantaoDetalhe() {
           </TabsContent>
 
           <TabsContent value="copies">
-            <CopiesView copies={copies} />
+            <CopiesView copies={copies} plantaoId={plantao.id} onReload={load} />
           </TabsContent>
 
           <TabsContent value="fila">
             <FilaView fila={filaSample} filaCount={filaCount} />
+          </TabsContent>
+
+          <TabsContent value="onda2">
+            <Onda2View plantaoId={plantao.id} />
           </TabsContent>
 
           <TabsContent value="config">
@@ -706,10 +720,61 @@ function HandoffColuna({ titulo, cor, itens, action }: { titulo: string; cor: st
   );
 }
 
-function CopiesView({ copies }: { copies: PlantaoCopy[] }) {
-  return (
+function CopiesView({ copies, plantaoId, onReload }: { copies: PlantaoCopy[]; plantaoId: string; onReload: () => void }) {
+  const [addOpen, setAddOpen] = useState(false);
+  const [novaTexto, setNovaTexto] = useState("");
+  const [salvando, setSalvando] = useState(false);
+
+  const copies1 = copies.filter(c => (c.fase || 1) === 1);
+  const copies2 = copies.filter(c => c.fase === 2);
+
+  const adicionarOnda2 = async () => {
+    const texto = novaTexto.trim();
+    if (texto.length < 20) {
+      toast({ title: "Copy curta demais", description: "Mínimo 20 caracteres.", variant: "destructive" });
+      return;
+    }
+    setSalvando(true);
+    const proximaOrdem = (copies2.reduce((m, c) => Math.max(m, c.ordem), 0) || 0) + 1;
+    const { error } = await (supabase as any).from("disparo_copies").insert({
+      plantao_id: plantaoId,
+      ordem: proximaOrdem,
+      texto,
+      ativa: true,
+      inclui_eflyer: false,
+      fase: 2,
+    });
+    setSalvando(false);
+    if (error) {
+      toast({ title: "Erro ao salvar", description: error.message, variant: "destructive" });
+      return;
+    }
+    toast({ title: "Copy Onda 2 adicionada" });
+    setNovaTexto("");
+    setAddOpen(false);
+    onReload();
+  };
+
+  const renderBloco = (lista: PlantaoCopy[], titulo: string, fase: 1 | 2) => (
     <div className="space-y-2">
-      {copies.map(c => (
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-bold flex items-center gap-2">
+          {titulo}
+          <Badge variant="outline" className={fase === 2 ? "bg-amber-50 border-amber-200 text-amber-800" : "bg-blue-50 border-blue-200 text-blue-800"}>
+            {lista.length} {lista.length === 1 ? "copy" : "copies"}
+          </Badge>
+        </h3>
+        {fase === 2 && (
+          <Button size="sm" variant="outline" onClick={() => setAddOpen(true)}>
+            <Plus className="mr-1 h-3 w-3" /> Nova copy Onda 2
+          </Button>
+        )}
+      </div>
+      {lista.length === 0 ? (
+        <Card><CardContent className="p-4 text-sm text-muted-foreground">
+          {fase === 2 ? "Sem copies de follow-up cadastradas. Adicione pelo menos 1 pra ativar a Onda 2." : "Sem copies cadastradas."}
+        </CardContent></Card>
+      ) : lista.map(c => (
         <Card key={c.id}>
           <CardContent className="p-4 space-y-2">
             <div className="flex items-center justify-between">
@@ -728,6 +793,123 @@ function CopiesView({ copies }: { copies: PlantaoCopy[] }) {
         </Card>
       ))}
     </div>
+  );
+
+  return (
+    <div className="space-y-6">
+      {renderBloco(copies1, "Onda 1 — primeira abordagem", 1)}
+      {renderBloco(copies2, "Onda 2 — follow-up (48h depois)", 2)}
+
+      <Dialog open={addOpen} onOpenChange={setAddOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><Plus className="h-5 w-5" /> Nova copy Onda 2</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="text-xs text-muted-foreground bg-amber-50 border border-amber-200 rounded p-2">
+              Use tom de retomada: "vi que não respondeu", "pra não esquecer", "última oportunidade". Variáveis: <code>{"{{primeiro_nome}}"}</code>, <code>{"{{nome}}"}</code>.
+            </div>
+            <Textarea
+              value={novaTexto}
+              onChange={(e) => setNovaTexto(e.target.value)}
+              rows={8}
+              placeholder="Oi {{primeiro_nome}}, vi que você não respondeu minha mensagem. Vou te mandar um vídeo rápido..."
+              disabled={salvando}
+            />
+            <p className="text-xs text-muted-foreground">{novaTexto.length} caracteres</p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAddOpen(false)} disabled={salvando}>Cancelar</Button>
+            <Button onClick={adicionarOnda2} disabled={salvando || novaTexto.trim().length < 20}>
+              {salvando ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : null}
+              Salvar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+function Onda2View({ plantaoId }: { plantaoId: string }) {
+  const [items, setItems] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const load = useCallback(async () => {
+    const { data } = await (supabase as any)
+      .from("disparo_fila")
+      .select("id, nome, telefone, corretor_id, enviado_em, msg2_status, msg2_pronto_em, msg2_aberto_em, msg2_confirmado_em, msg2_motivo_nao_envio, profiles!disparo_fila_corretor_id_fkey(name)")
+      .eq("plantao_id", plantaoId)
+      .not("msg2_pronto_em", "is", null)
+      .order("msg2_pronto_em", { ascending: true });
+    setItems(data || []);
+    setLoading(false);
+  }, [plantaoId]);
+
+  useEffect(() => {
+    load();
+    const i = setInterval(load, 15000);
+    return () => clearInterval(i);
+  }, [load]);
+
+  if (loading) return <Card><CardContent className="p-8 flex justify-center"><Loader2 className="h-6 w-6 animate-spin" /></CardContent></Card>;
+
+  if (items.length === 0) {
+    return (
+      <Card>
+        <CardContent className="p-6 text-center space-y-2">
+          <Clock className="h-10 w-10 mx-auto text-muted-foreground" />
+          <p className="font-medium">Nenhum lead pronto pra Onda 2 ainda</p>
+          <p className="text-xs text-muted-foreground">
+            Cron diário às 8h promove leads com msg 1 enviada há ≥48h sem resposta.
+            Ou rode <code className="bg-muted px-1 rounded">SELECT marcar_pronto_onda2();</code> no SQL editor pra forçar agora.
+          </p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const labelStatus = (s: string | null, conf: string | null) => {
+    if (s === "enviou") return { label: "✅ Enviada", color: "bg-green-100 text-green-700" };
+    if (s === "nao_enviou") return { label: "❌ Não enviou", color: "bg-red-100 text-red-700" };
+    if (s === "abriu_wa") return { label: "📱 Abriu WA", color: "bg-blue-100 text-blue-700" };
+    if (s === "pendente" && !conf) return { label: "⏳ Pendente", color: "bg-amber-100 text-amber-700" };
+    return { label: s || "—", color: "bg-muted" };
+  };
+
+  return (
+    <Card>
+      <CardContent className="p-0">
+        <table className="w-full text-sm">
+          <thead className="text-xs text-muted-foreground uppercase border-b">
+            <tr>
+              <th className="text-left p-3">Cliente</th>
+              <th className="text-left p-3">Corretor</th>
+              <th className="text-left p-3">Msg 1 enviada</th>
+              <th className="text-left p-3">Pronto Onda 2</th>
+              <th className="text-left p-3">Status Onda 2</th>
+            </tr>
+          </thead>
+          <tbody>
+            {items.map(it => {
+              const st = labelStatus(it.msg2_status, it.msg2_confirmado_em);
+              return (
+                <tr key={it.id} className="border-t border-border">
+                  <td className="p-3">
+                    <div className="font-medium">{it.nome}</div>
+                    <div className="font-mono text-xs text-muted-foreground">{it.telefone}</div>
+                  </td>
+                  <td className="p-3 text-sm">{it.profiles?.name || "—"}</td>
+                  <td className="p-3 text-xs">{it.enviado_em ? new Date(it.enviado_em).toLocaleString("pt-BR") : "—"}</td>
+                  <td className="p-3 text-xs">{it.msg2_pronto_em ? new Date(it.msg2_pronto_em).toLocaleString("pt-BR") : "—"}</td>
+                  <td className="p-3"><Badge className={st.color}>{st.label}</Badge></td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </CardContent>
+    </Card>
   );
 }
 

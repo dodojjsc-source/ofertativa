@@ -85,6 +85,7 @@ export interface PlantaoCopy {
   vezes_usada: number;
   taxa_resposta: number | null;
   taxa_optout: number | null;
+  fase: 1 | 2;
   created_at: string;
 }
 
@@ -112,6 +113,15 @@ export interface DisparoFila {
   abordagem_confirmado_em: string | null;
   abordagem_motivo_nao_envio: string | null;
   print_url: string | null;
+  msg2_copy_id: string | null;
+  msg2_status: AbordagemManualStatus | null;
+  msg2_texto: string | null;
+  msg2_complemento: string | null;
+  msg2_aberto_em: string | null;
+  msg2_confirmado_em: string | null;
+  msg2_motivo_nao_envio: string | null;
+  msg2_print_url: string | null;
+  msg2_pronto_em: string | null;
   created_at: string;
   updated_at: string;
 }

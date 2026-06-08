@@ -17,6 +17,7 @@ import { toPng } from "html-to-image";
 
 interface LeadComPlantao extends DisparoFila {
   plantao_nome?: string;
+  _onda?: 1 | 2;
 }
 
 const MOTIVOS_NAO_ENVIO = [
@@ -33,6 +34,7 @@ export default function AbordagemManual() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [leads, setLeads] = useState<LeadComPlantao[]>([]);
+  const [leadsOnda2, setLeadsOnda2] = useState<LeadComPlantao[]>([]);
   const [copiesPorPlantao, setCopiesPorPlantao] = useState<Record<string, PlantaoCopy[]>>({});
   const [leadAtivo, setLeadAtivo] = useState<LeadComPlantao | null>(null);
   const [copySelecionada, setCopySelecionada] = useState<PlantaoCopy | null>(null);
@@ -67,13 +69,23 @@ export default function AbordagemManual() {
 
   const load = useCallback(async () => {
     if (!user?.id) return;
-    const { data: fila, error } = await (supabase as any)
-      .from("disparo_fila")
-      .select("*, disparo_plantoes!inner(id, nome, modo)")
-      .eq("corretor_id", user.id)
-      .eq("disparo_plantoes.modo", "manual")
-      .in("abordagem_status", ["pendente", "abriu_wa"])
-      .order("created_at", { ascending: true });
+    const [{ data: fila, error }, { data: filaOnda2 }] = await Promise.all([
+      (supabase as any)
+        .from("disparo_fila")
+        .select("*, disparo_plantoes!inner(id, nome, modo)")
+        .eq("corretor_id", user.id)
+        .eq("disparo_plantoes.modo", "manual")
+        .in("abordagem_status", ["pendente", "abriu_wa"])
+        .order("created_at", { ascending: true }),
+      (supabase as any)
+        .from("disparo_fila")
+        .select("*, disparo_plantoes!inner(id, nome, modo)")
+        .eq("corretor_id", user.id)
+        .eq("disparo_plantoes.modo", "manual")
+        .not("msg2_pronto_em", "is", null)
+        .is("msg2_confirmado_em", null)
+        .order("msg2_pronto_em", { ascending: true }),
+    ]);
 
     if (error) {
       toast({ title: "Erro ao carregar leads", description: error.message, variant: "destructive" });
@@ -84,16 +96,24 @@ export default function AbordagemManual() {
     const list: LeadComPlantao[] = (fila || []).map((f: any) => ({
       ...f,
       plantao_nome: f.disparo_plantoes?.nome,
+      _onda: 1,
+    }));
+    const list2: LeadComPlantao[] = (filaOnda2 || []).map((f: any) => ({
+      ...f,
+      plantao_nome: f.disparo_plantoes?.nome,
+      _onda: 2,
     }));
     setLeads(list);
+    setLeadsOnda2(list2);
 
-    const plantaoIds = Array.from(new Set(list.map((l) => l.plantao_id)));
+    const plantaoIds = Array.from(new Set([...list, ...list2].map((l) => l.plantao_id)));
     if (plantaoIds.length > 0) {
       const { data: copies } = await (supabase as any)
         .from("disparo_copies")
         .select("*")
         .in("plantao_id", plantaoIds)
         .eq("ativa", true)
+        .order("fase")
         .order("ordem");
       const agrup: Record<string, PlantaoCopy[]> = {};
       (copies || []).forEach((c: PlantaoCopy) => {
@@ -164,10 +184,12 @@ export default function AbordagemManual() {
     setCopySelecionada(null);
     setComplemento("");
 
+    const rpcName = leadAtivo._onda === 2 ? "abordagem_abrir_wa_msg2" : "abordagem_abrir_wa";
+
     // Registra a intenção em background (não bloqueia o UX nem a abertura do WA).
     (async () => {
       try {
-        const { error } = await (supabase as any).rpc("abordagem_abrir_wa", {
+        const { error } = await (supabase as any).rpc(rpcName, {
           _fila_id: filaId,
           _copy_id: copyId,
           _texto: texto,
@@ -204,7 +226,8 @@ export default function AbordagemManual() {
         }
       }
 
-      const { error } = await (supabase as any).rpc("abordagem_confirmar", {
+      const rpcName = confirmando._onda === 2 ? "abordagem_confirmar_msg2" : "abordagem_confirmar";
+      const { error } = await (supabase as any).rpc(rpcName, {
         _fila_id: confirmando.id,
         _enviou: enviou,
         _motivo: enviou ? null : motivoNaoEnvio,
@@ -257,14 +280,15 @@ export default function AbordagemManual() {
         </div>
 
         <Card>
-          <CardContent className="p-3 sm:p-4 grid grid-cols-3 gap-2 sm:gap-3 text-center">
+          <CardContent className="p-3 sm:p-4 grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3 text-center">
             <Kpi label="Pra abordar" value={leads.filter((l) => l.abordagem_status === "pendente" || !l.abordagem_status).length} cor="text-amber-600" />
             <Kpi label="Aguardando" value={leads.filter((l) => l.abordagem_status === "abriu_wa").length} cor="text-blue-600" />
-            <Kpi label="Total" value={leads.length} cor="" />
+            <Kpi label="🔁 Onda 2" value={leadsOnda2.length} cor={leadsOnda2.length > 0 ? "text-orange-600" : ""} />
+            <Kpi label="Total" value={leads.length + leadsOnda2.length} cor="" />
           </CardContent>
         </Card>
 
-        {leads.length === 0 ? (
+        {leads.length === 0 && leadsOnda2.length === 0 ? (
           <Card>
             <CardContent className="py-16 text-center text-muted-foreground space-y-2">
               <CheckCircle2 className="h-12 w-12 mx-auto text-green-600" />
@@ -273,59 +297,144 @@ export default function AbordagemManual() {
             </CardContent>
           </Card>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {leads.map((lead) => {
-              const copies = copiesPorPlantao[lead.plantao_id] || [];
-              return (
-                <Card key={lead.id} className="hover:shadow-md transition">
-                  <CardContent className="p-4 space-y-3">
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <div className="font-bold flex items-center gap-2">
-                          <User className="h-4 w-4 text-muted-foreground" />
-                          {lead.nome}
-                        </div>
-                        <div className="text-xs text-muted-foreground font-mono mt-1">{lead.telefone}</div>
-                        <div className="text-xs text-muted-foreground mt-1">{lead.plantao_nome}</div>
-                      </div>
-                      {lead.abordagem_status === "abriu_wa" ? (
-                        <Badge className="bg-blue-100 text-blue-700">Aguardando confirmar</Badge>
-                      ) : (
-                        <Badge variant="outline">Novo</Badge>
-                      )}
-                    </div>
+          <div className="space-y-6">
+            {leadsOnda2.length > 0 && (
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <h2 className="text-base sm:text-lg font-bold flex items-center gap-2">
+                    <Clock className="h-5 w-5 text-orange-600" />
+                    Onda 2 — Follow-up
+                  </h2>
+                  <Badge className="bg-orange-100 text-orange-800 border-orange-200">{leadsOnda2.length} pendente{leadsOnda2.length === 1 ? "" : "s"}</Badge>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Esses clientes receberam sua primeira mensagem mas não responderam. Mande a 2ª copy pra reativar.
+                </p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {leadsOnda2.map((lead) => {
+                    const copiesAll = copiesPorPlantao[lead.plantao_id] || [];
+                    const copies2 = copiesAll.filter((c) => c.fase === 2);
+                    return (
+                      <Card key={`o2-${lead.id}`} className="hover:shadow-md transition border-orange-200 bg-orange-50/30">
+                        <CardContent className="p-4 space-y-3">
+                          <div className="flex items-start justify-between gap-2">
+                            <div>
+                              <div className="font-bold flex items-center gap-2">
+                                <User className="h-4 w-4 text-muted-foreground" />
+                                {lead.nome}
+                              </div>
+                              <div className="text-xs text-muted-foreground font-mono mt-1">{lead.telefone}</div>
+                              <div className="text-xs text-muted-foreground mt-1">{lead.plantao_nome}</div>
+                            </div>
+                            {lead.msg2_status === "abriu_wa" ? (
+                              <Badge className="bg-blue-100 text-blue-700">Aguardando confirmar</Badge>
+                            ) : (
+                              <Badge className="bg-orange-100 text-orange-800 border-orange-200">🔁 Onda 2</Badge>
+                            )}
+                          </div>
 
-                    {lead.origem && <div className="text-xs"><span className="text-muted-foreground">Origem: </span>{lead.origem}</div>}
+                          <div className="text-xs text-muted-foreground">
+                            Msg 1 enviada {lead.enviado_em ? new Date(lead.enviado_em).toLocaleDateString("pt-BR") : "—"}
+                          </div>
 
-                    <div className="flex gap-2 pt-1">
-                      {lead.abordagem_status === "abriu_wa" ? (
-                        <Button
-                          variant="outline"
-                          className="flex-1 h-12 sm:h-10 text-base sm:text-sm"
-                          onClick={() => setConfirmando(lead)}
-                        >
-                          <Clock className="mr-1 h-4 w-4" />
-                          Confirmar envio
-                        </Button>
-                      ) : (
-                        <Button
-                          className="flex-1 bg-green-600 hover:bg-green-700 h-12 sm:h-10 text-base sm:text-sm"
-                          disabled={copies.length === 0}
-                          onClick={() => {
-                            setLeadAtivo(lead);
-                            setCopySelecionada(copies[0] || null);
-                            setComplemento("");
-                          }}
-                        >
-                          <MessageCircle className="mr-1 h-4 w-4" />
-                          Abordar
-                        </Button>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
-              );
-            })}
+                          <div className="flex gap-2 pt-1">
+                            {lead.msg2_status === "abriu_wa" ? (
+                              <Button
+                                variant="outline"
+                                className="flex-1 h-12 sm:h-10 text-base sm:text-sm"
+                                onClick={() => setConfirmando(lead)}
+                              >
+                                <Clock className="mr-1 h-4 w-4" />
+                                Confirmar 2ª msg
+                              </Button>
+                            ) : (
+                              <Button
+                                className="flex-1 bg-orange-600 hover:bg-orange-700 h-12 sm:h-10 text-base sm:text-sm"
+                                disabled={copies2.length === 0}
+                                onClick={() => {
+                                  setLeadAtivo(lead);
+                                  setCopySelecionada(copies2[0] || null);
+                                  setComplemento("");
+                                }}
+                              >
+                                <MessageCircle className="mr-1 h-4 w-4" />
+                                {copies2.length === 0 ? "Sem copy Onda 2" : "Mandar 2ª msg"}
+                              </Button>
+                            )}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {leads.length > 0 && (
+              <div className="space-y-2">
+                {leadsOnda2.length > 0 && (
+                  <div className="flex items-center gap-2 pt-2">
+                    <h2 className="text-base sm:text-lg font-bold">1ª abordagem</h2>
+                    <Badge variant="outline">{leads.length}</Badge>
+                  </div>
+                )}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {leads.map((lead) => {
+                    const copiesAll = copiesPorPlantao[lead.plantao_id] || [];
+                    const copies1 = copiesAll.filter((c) => (c.fase || 1) === 1);
+                    return (
+                      <Card key={lead.id} className="hover:shadow-md transition">
+                        <CardContent className="p-4 space-y-3">
+                          <div className="flex items-start justify-between gap-2">
+                            <div>
+                              <div className="font-bold flex items-center gap-2">
+                                <User className="h-4 w-4 text-muted-foreground" />
+                                {lead.nome}
+                              </div>
+                              <div className="text-xs text-muted-foreground font-mono mt-1">{lead.telefone}</div>
+                              <div className="text-xs text-muted-foreground mt-1">{lead.plantao_nome}</div>
+                            </div>
+                            {lead.abordagem_status === "abriu_wa" ? (
+                              <Badge className="bg-blue-100 text-blue-700">Aguardando confirmar</Badge>
+                            ) : (
+                              <Badge variant="outline">Novo</Badge>
+                            )}
+                          </div>
+
+                          {lead.origem && <div className="text-xs"><span className="text-muted-foreground">Origem: </span>{lead.origem}</div>}
+
+                          <div className="flex gap-2 pt-1">
+                            {lead.abordagem_status === "abriu_wa" ? (
+                              <Button
+                                variant="outline"
+                                className="flex-1 h-12 sm:h-10 text-base sm:text-sm"
+                                onClick={() => setConfirmando(lead)}
+                              >
+                                <Clock className="mr-1 h-4 w-4" />
+                                Confirmar envio
+                              </Button>
+                            ) : (
+                              <Button
+                                className="flex-1 bg-green-600 hover:bg-green-700 h-12 sm:h-10 text-base sm:text-sm"
+                                disabled={copies1.length === 0}
+                                onClick={() => {
+                                  setLeadAtivo(lead);
+                                  setCopySelecionada(copies1[0] || null);
+                                  setComplemento("");
+                                }}
+                              >
+                                <MessageCircle className="mr-1 h-4 w-4" />
+                                Abordar
+                              </Button>
+                            )}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -336,10 +445,11 @@ export default function AbordagemManual() {
           <DialogHeader>
             <DialogTitle className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2 text-left">
               <span className="flex items-center gap-2">
-                <MessageCircle className="h-5 w-5 text-green-600 shrink-0" />
-                <span className="truncate">Abordar {leadAtivo?.nome}</span>
+                <MessageCircle className={`h-5 w-5 shrink-0 ${leadAtivo?._onda === 2 ? "text-orange-600" : "text-green-600"}`} />
+                <span className="truncate">{leadAtivo?._onda === 2 ? "Follow-up Onda 2 com" : "Abordar"} {leadAtivo?.nome}</span>
               </span>
               <span className="text-sm font-mono text-muted-foreground">{leadAtivo?.telefone}</span>
+              {leadAtivo?._onda === 2 && <Badge className="bg-orange-100 text-orange-800 border-orange-200">🔁 2ª mensagem</Badge>}
             </DialogTitle>
           </DialogHeader>
 
@@ -357,11 +467,13 @@ export default function AbordagemManual() {
                   >
                     <SelectTrigger className="h-12 text-base"><SelectValue placeholder="Escolha uma copy" /></SelectTrigger>
                     <SelectContent>
-                      {(copiesPorPlantao[leadAtivo.plantao_id] || []).map((c) => (
-                        <SelectItem key={c.id} value={c.id}>
-                          Copy {c.ordem} {c.taxa_resposta !== null ? `(${c.taxa_resposta}% resposta)` : ""}
-                        </SelectItem>
-                      ))}
+                      {(copiesPorPlantao[leadAtivo.plantao_id] || [])
+                        .filter((c) => (c.fase || 1) === (leadAtivo._onda || 1))
+                        .map((c) => (
+                          <SelectItem key={c.id} value={c.id}>
+                            Copy {c.ordem} {c.taxa_resposta !== null ? `(${c.taxa_resposta}% resposta)` : ""}
+                          </SelectItem>
+                        ))}
                     </SelectContent>
                   </Select>
                 </div>
