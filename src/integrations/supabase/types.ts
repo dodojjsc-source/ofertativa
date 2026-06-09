@@ -349,9 +349,17 @@ export type Database = {
       }
       disparo_fila: {
         Row: {
+          abordagem_aberto_em: string | null
+          abordagem_confirmado_em: string | null
+          abordagem_motivo_nao_envio: string | null
+          abordagem_status:
+            | Database["public"]["Enums"]["abordagem_manual_status"]
+            | null
           agendado_para: string | null
           bitrix_lead_id: string | null
+          complemento_livre: string | null
           copy_id: string | null
+          corretor_id: string | null
           created_at: string
           email: string | null
           enviado_em: string | null
@@ -359,18 +367,29 @@ export type Database = {
           id: string
           motivo_falha: string | null
           nome: string
+          nome_original: string | null
           origem: string | null
           plantao_id: string
+          print_url: string | null
           status: Database["public"]["Enums"]["disparo_fila_status"]
           telefone: string
           telefone_norm: string
           tentativas: number
+          texto_enviado: string | null
           updated_at: string
         }
         Insert: {
+          abordagem_aberto_em?: string | null
+          abordagem_confirmado_em?: string | null
+          abordagem_motivo_nao_envio?: string | null
+          abordagem_status?:
+            | Database["public"]["Enums"]["abordagem_manual_status"]
+            | null
           agendado_para?: string | null
           bitrix_lead_id?: string | null
+          complemento_livre?: string | null
           copy_id?: string | null
+          corretor_id?: string | null
           created_at?: string
           email?: string | null
           enviado_em?: string | null
@@ -378,18 +397,29 @@ export type Database = {
           id?: string
           motivo_falha?: string | null
           nome: string
+          nome_original?: string | null
           origem?: string | null
           plantao_id: string
+          print_url?: string | null
           status?: Database["public"]["Enums"]["disparo_fila_status"]
           telefone: string
           telefone_norm: string
           tentativas?: number
+          texto_enviado?: string | null
           updated_at?: string
         }
         Update: {
+          abordagem_aberto_em?: string | null
+          abordagem_confirmado_em?: string | null
+          abordagem_motivo_nao_envio?: string | null
+          abordagem_status?:
+            | Database["public"]["Enums"]["abordagem_manual_status"]
+            | null
           agendado_para?: string | null
           bitrix_lead_id?: string | null
+          complemento_livre?: string | null
           copy_id?: string | null
+          corretor_id?: string | null
           created_at?: string
           email?: string | null
           enviado_em?: string | null
@@ -397,12 +427,15 @@ export type Database = {
           id?: string
           motivo_falha?: string | null
           nome?: string
+          nome_original?: string | null
           origem?: string | null
           plantao_id?: string
+          print_url?: string | null
           status?: Database["public"]["Enums"]["disparo_fila_status"]
           telefone?: string
           telefone_norm?: string
           tentativas?: number
+          texto_enviado?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -411,6 +444,13 @@ export type Database = {
             columns: ["copy_id"]
             isOneToOne: false
             referencedRelation: "disparo_copies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "disparo_fila_corretor_id_fkey"
+            columns: ["corretor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
           {
@@ -480,6 +520,7 @@ export type Database = {
           id: string
           iniciado_em: string | null
           janelas: Json
+          modo: Database["public"]["Enums"]["plantao_modo"]
           modo_handoff: string
           nome: string
           pausado_em: string | null
@@ -510,6 +551,7 @@ export type Database = {
           id?: string
           iniciado_em?: string | null
           janelas?: Json
+          modo?: Database["public"]["Enums"]["plantao_modo"]
           modo_handoff?: string
           nome: string
           pausado_em?: string | null
@@ -540,6 +582,7 @@ export type Database = {
           id?: string
           iniciado_em?: string | null
           janelas?: Json
+          modo?: Database["public"]["Enums"]["plantao_modo"]
           modo_handoff?: string
           nome?: string
           pausado_em?: string | null
@@ -727,6 +770,7 @@ export type Database = {
           is_mobile: boolean | null
           motivo_validacao: string | null
           nome: string
+          nome_original: string | null
           numero_core: string | null
           observacao: string | null
           repassar_bitrix: boolean | null
@@ -754,6 +798,7 @@ export type Database = {
           is_mobile?: boolean | null
           motivo_validacao?: string | null
           nome: string
+          nome_original?: string | null
           numero_core?: string | null
           observacao?: string | null
           repassar_bitrix?: boolean | null
@@ -781,6 +826,7 @@ export type Database = {
           is_mobile?: boolean | null
           motivo_validacao?: string | null
           nome?: string
+          nome_original?: string | null
           numero_core?: string | null
           observacao?: string | null
           repassar_bitrix?: boolean | null
@@ -1045,6 +1091,31 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      abordagem_abrir_wa: {
+        Args: {
+          _complemento?: string
+          _copy_id: string
+          _fila_id: string
+          _texto: string
+        }
+        Returns: boolean
+      }
+      abordagem_confirmar: {
+        Args: {
+          _enviou: boolean
+          _fila_id: string
+          _motivo?: string
+          _print_url?: string
+        }
+        Returns: boolean
+      }
+      count_leads_por_campanha: {
+        Args: never
+        Returns: {
+          campanha_id: string
+          total: number
+        }[]
+      }
       get_user_gestor_id: { Args: { _user_id: string }; Returns: string }
       handoff_pegar: {
         Args: { _corretor_id: string; _lock_min?: number; _resposta_id: string }
@@ -1062,8 +1133,18 @@ export type Database = {
         Args: { _plantao_id: string }
         Returns: undefined
       }
+      sinalizar_optout_manual: {
+        Args: { _fila_id: string; _motivo?: string }
+        Returns: boolean
+      }
     }
     Enums: {
+      abordagem_manual_status:
+        | "pendente"
+        | "abriu_wa"
+        | "enviou"
+        | "nao_enviou"
+        | "respondida"
       app_role: "admin" | "gestor" | "corretor"
       assignment_status: "pendente" | "concluido"
       bitrix_status: "pendente" | "processado" | "erro" | "descartado"
@@ -1087,6 +1168,7 @@ export type Database = {
         | "concluido"
         | "descartado"
       lead_status: "pendente" | "atendido" | "nao_atendido"
+      plantao_modo: "automatico" | "manual"
       plantao_status:
         | "rascunho"
         | "aprovado"
@@ -1228,6 +1310,13 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      abordagem_manual_status: [
+        "pendente",
+        "abriu_wa",
+        "enviou",
+        "nao_enviou",
+        "respondida",
+      ],
       app_role: ["admin", "gestor", "corretor"],
       assignment_status: ["pendente", "concluido"],
       bitrix_status: ["pendente", "processado", "erro", "descartado"],
@@ -1254,6 +1343,7 @@ export const Constants = {
         "descartado",
       ],
       lead_status: ["pendente", "atendido", "nao_atendido"],
+      plantao_modo: ["automatico", "manual"],
       plantao_status: [
         "rascunho",
         "aprovado",
