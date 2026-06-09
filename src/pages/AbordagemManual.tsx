@@ -59,17 +59,29 @@ export default function AbordagemManual() {
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/^-+|-+$/g, "");
 
+  const HOMONIMOS_VS = ["gabriela"];
+
   useEffect(() => {
     if (!user?.id) return;
+
     (async () => {
       const { data } = await (supabase as any)
         .from("profiles")
         .select("name")
         .eq("id", user.id)
         .single();
+
       const nome = (data?.name || "").trim();
-      const primeiro = nome.split(" ")[0] || "";
-      setCorretorPrimeiroNomeSlug(slugify(primeiro));
+      const tokens = nome.split(/\s+/).filter(Boolean);
+      const primeiro = tokens[0] || "";
+      const sobrenome = tokens.length > 1 ? tokens[tokens.length - 1] : "";
+      const primeiroSlug = slugify(primeiro);
+
+      const slug = HOMONIMOS_VS.includes(primeiroSlug) && sobrenome
+        ? slugify(primeiro + "-" + sobrenome)
+        : primeiroSlug;
+
+      setCorretorPrimeiroNomeSlug(slug);
     })();
   }, [user?.id]);
 
