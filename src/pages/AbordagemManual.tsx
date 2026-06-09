@@ -5,7 +5,9 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeft, MessageCircle, Loader2, CheckCircle2, XCircle, Send, Clock, User } from "lucide-react";
+import { ArrowLeft, MessageCircle, Loader2, CheckCircle2, XCircle, Send, Clock, User, Ban } from "lucide-react";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { Input } from "@/components/ui/input";
 import { useEffect, useState, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -35,7 +37,11 @@ export default function AbordagemManual() {
   const [loading, setLoading] = useState(true);
   const [leads, setLeads] = useState<LeadComPlantao[]>([]);
   const [leadsOnda2, setLeadsOnda2] = useState<LeadComPlantao[]>([]);
+  const [leadsJaEnviados, setLeadsJaEnviados] = useState<LeadComPlantao[]>([]);
   const [copiesPorPlantao, setCopiesPorPlantao] = useState<Record<string, PlantaoCopy[]>>({});
+  const [optoutAlvo, setOptoutAlvo] = useState<LeadComPlantao | null>(null);
+  const [optoutMotivo, setOptoutMotivo] = useState("");
+  const [marcandoOptout, setMarcandoOptout] = useState(false);
   const [leadAtivo, setLeadAtivo] = useState<LeadComPlantao | null>(null);
   const [copySelecionada, setCopySelecionada] = useState<PlantaoCopy | null>(null);
   const [complemento, setComplemento] = useState("");
@@ -69,7 +75,8 @@ export default function AbordagemManual() {
 
   const load = useCallback(async () => {
     if (!user?.id) return;
-    const [{ data: fila, error }, { data: filaOnda2 }] = await Promise.all([
+    const desde14d = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString();
+    const [{ data: fila, error }, { data: filaOnda2 }, { data: filaEnviados }] = await Promise.all([
       (supabase as any)
         .from("disparo_fila")
         .select("*, disparo_plantoes!inner(id, nome, modo)")
@@ -85,6 +92,15 @@ export default function AbordagemManual() {
         .not("msg2_pronto_em", "is", null)
         .is("msg2_confirmado_em", null)
         .order("msg2_pronto_em", { ascending: true }),
+      (supabase as any)
+        .from("disparo_fila")
+        .select("*, disparo_plantoes!inner(id, nome, modo)")
+        .eq("corretor_id", user.id)
+        .eq("disparo_plantoes.modo", "manual")
+        .eq("abordagem_status", "enviou")
+        .gte("abordagem_confirmado_em", desde14d)
+        .order("abordagem_confirmado_em", { ascending: false })
+        .limit(100),
     ]);
 
     if (error) {
@@ -103,10 +119,16 @@ export default function AbordagemManual() {
       plantao_nome: f.disparo_plantoes?.nome,
       _onda: 2,
     }));
+    const listEnviados: LeadComPlantao[] = (filaEnviados || []).map((f: any) => ({
+      ...f,
+      plantao_nome: f.disparo_plantoes?.nome,
+      _onda: 1,
+    }));
     setLeads(list);
     setLeadsOnda2(list2);
+    setLeadsJaEnviados(listEnviados);
 
-    const plantaoIds = Array.from(new Set([...list, ...list2].map((l) => l.plantao_id)));
+    const plantaoIds = Array.from(new Set([...list, ...list2, ...listEnviados].map((l) => l.plantao_id)));
     if (plantaoIds.length > 0) {
       const { data: copies } = await (supabase as any)
         .from("disparo_copies")
@@ -200,6 +222,27 @@ export default function AbordagemManual() {
         toast({ title: "Aviso", description: "WhatsApp abriu, mas falhou registrar: " + err.message, variant: "destructive" });
       }
     })();
+  };
+
+  const confirmarOptout = async () => {
+    if (!optoutAlvo) return;
+    setMarcandoOptout(true);
+    try {
+      const { data, error } = await (supabase as any).rpc("sinalizar_optout_manual", {
+        _fila_id: optoutAlvo.id,
+        _motivo: optoutMotivo.trim() || null,
+      });
+      if (error) throw error;
+      if (data === false) throw new Error("Não foi possível sinalizar. Esse lead pode não ser seu.");
+      toast({ title: "Opt-out registrado", description: `${optoutAlvo.nome} sai de todas as listas.` });
+      setOptoutAlvo(null);
+      setOptoutMotivo("");
+      load();
+    } catch (err: any) {
+      toast({ title: "Erro ao sinalizar opt-out", description: err.message, variant: "destructive" });
+    } finally {
+      setMarcandoOptout(false);
+    }
   };
 
   const confirmarEnvio = async (enviou: boolean) => {
@@ -361,6 +404,14 @@ export default function AbordagemManual() {
                               </Button>
                             )}
                           </div>
+                          <button
+                            type="button"
+                            onClick={() => setOptoutAlvo(lead)}
+                            className="text-xs text-muted-foreground hover:text-red-600 underline self-start"
+                          >
+                            <Ban className="inline h-3 w-3 mr-1" />
+                            Cliente pediu SAIR
+                          </button>
                         </CardContent>
                       </Card>
                     );
@@ -427,6 +478,14 @@ export default function AbordagemManual() {
                               </Button>
                             )}
                           </div>
+                          <button
+                            type="button"
+                            onClick={() => setOptoutAlvo(lead)}
+                            className="text-xs text-muted-foreground hover:text-red-600 underline self-start"
+                          >
+                            <Ban className="inline h-3 w-3 mr-1" />
+                            Cliente pediu SAIR
+                          </button>
                         </CardContent>
                       </Card>
                     );
@@ -434,9 +493,83 @@ export default function AbordagemManual() {
                 </div>
               </div>
             )}
+
+            {leadsJaEnviados.length > 0 && (
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 pt-2">
+                  <h2 className="text-base sm:text-lg font-bold flex items-center gap-2">
+                    <Send className="h-5 w-5 text-blue-600" />
+                    Já abordei (últimos 14 dias)
+                  </h2>
+                  <Badge variant="outline">{leadsJaEnviados.length}</Badge>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Se algum desses clientes pediu pra SAIR no WhatsApp, marca aqui pra remover de todas as ofertas futuras.
+                </p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                  {leadsJaEnviados.map((lead) => (
+                    <Card key={`enviado-${lead.id}`} className="bg-muted/30">
+                      <CardContent className="p-3 flex items-center justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                          <div className="font-medium text-sm truncate">{lead.nome}</div>
+                          <div className="text-xs text-muted-foreground font-mono">{lead.telefone}</div>
+                          <div className="text-xs text-muted-foreground">
+                            Enviado {lead.abordagem_confirmado_em ? new Date(lead.abordagem_confirmado_em).toLocaleDateString("pt-BR") : "—"}
+                          </div>
+                        </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="text-xs border-red-200 text-red-700 hover:bg-red-50 hover:text-red-800 shrink-0"
+                          onClick={() => setOptoutAlvo(lead)}
+                        >
+                          <Ban className="mr-1 h-3 w-3" />
+                          SAIR
+                        </Button>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
+
+      {/* ALERTDIALOG: confirma opt-out manual */}
+      <AlertDialog open={!!optoutAlvo} onOpenChange={(o) => { if (!o) { setOptoutAlvo(null); setOptoutMotivo(""); } }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <Ban className="h-5 w-5 text-red-600" />
+              Cliente {optoutAlvo?.nome} pediu pra SAIR?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Vai sumir das suas listas e ficar bloqueado em <strong>todas as ofertas futuras</strong> (qualquer plantão, qualquer corretor). Ação não pode ser desfeita pela sua tela.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="space-y-2">
+            <label className="text-xs font-semibold uppercase text-muted-foreground">Motivo (opcional)</label>
+            <Input
+              value={optoutMotivo}
+              onChange={(e) => setOptoutMotivo(e.target.value.slice(0, 200))}
+              placeholder="Ex: respondeu SAIR no WhatsApp"
+              disabled={marcandoOptout}
+            />
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={marcandoOptout}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => { e.preventDefault(); confirmarOptout(); }}
+              disabled={marcandoOptout}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              {marcandoOptout ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Ban className="mr-1 h-4 w-4" />}
+              Confirmar opt-out
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* DIALOG: escolher copy + abrir wa.me */}
       <Dialog open={!!leadAtivo} onOpenChange={(o) => { if (!o) { setLeadAtivo(null); setCopySelecionada(null); setComplemento(""); } }}>
