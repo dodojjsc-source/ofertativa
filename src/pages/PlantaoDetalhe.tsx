@@ -807,7 +807,7 @@ function CopiesView({ copies, plantaoId, onReload }: { copies: PlantaoCopy[]; pl
           </DialogHeader>
           <div className="space-y-3">
             <div className="text-xs text-muted-foreground bg-amber-50 border border-amber-200 rounded p-2">
-              Use tom de retomada: "vi que não respondeu", "pra não esquecer", "última oportunidade". Variáveis: <code>{"{{primeiro_nome}}"}</code>, <code>{"{{nome}}"}</code>.
+              Use tom de retomada: "vi que não respondeu", "pra não esquecer", "última oportunidade". Variáveis: <code>{"{{primeiro_nome}}"}</code>, <code>{"{{corretor_primeiro_nome}}"}</code>.
             </div>
             <Textarea
               value={novaTexto}

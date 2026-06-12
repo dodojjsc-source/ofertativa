@@ -49,6 +49,8 @@ export default function AbordagemManual() {
   const [motivoNaoEnvio, setMotivoNaoEnvio] = useState("");
   const [salvando, setSalvando] = useState(false);
   const [corretorPrimeiroNomeSlug, setCorretorPrimeiroNomeSlug] = useState<string>("");
+  const [corretorPrimeiroNome, setCorretorPrimeiroNome] = useState<string>("");
+  const [corretorNomeCompleto, setCorretorNomeCompleto] = useState<string>("");
   const printRef = useRef<HTMLDivElement>(null);
 
   const slugify = (txt: string) =>
@@ -82,6 +84,8 @@ export default function AbordagemManual() {
         : primeiroSlug;
 
       setCorretorPrimeiroNomeSlug(slug);
+      setCorretorPrimeiroNome(primeiro);
+      setCorretorNomeCompleto(nome);
     })();
   }, [user?.id]);
 
@@ -173,6 +177,8 @@ export default function AbordagemManual() {
     let t = template
       .replace(/\{\{\s*primeiro_nome\s*\}\}/gi, primeiro)
       .replace(/\{\{\s*nome\s*\}\}/gi, primeiro)
+      .replace(/\{\{\s*corretor_primeiro_nome\s*\}\}/gi, corretorPrimeiroNome)
+      .replace(/\{\{\s*corretor_nome\s*\}\}/gi, corretorNomeCompleto || corretorPrimeiroNome)
       .replace(/\{\{\s*eflyer\s*\}\}/gi, flyerUrl)
       .replace(/\{\{\s*flyer\s*\}\}/gi, flyerUrl);
 
