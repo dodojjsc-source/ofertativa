@@ -7,12 +7,12 @@ CREATE POLICY "Gestores podem ver suas campanhas"
     public.has_role(auth.uid(), 'gestor') AND (
       gestor_id = auth.uid() OR
       gestor_id IS NULL OR
-      nome IN (
-        SELECT DISTINCT campanha FROM public.leads
+      id IN (
+        SELECT DISTINCT campanha_id FROM public.leads
         WHERE corretor_id IN (
           SELECT id FROM public.profiles WHERE gestor_id = auth.uid()
         )
-        AND campanha IS NOT NULL
+        AND campanha_id IS NOT NULL
       )
     )
   );
