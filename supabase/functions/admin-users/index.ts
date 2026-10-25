@@ -375,6 +375,15 @@ Deno.serve(async (req) => {
         const ex = await admin.from("leads").select("bitrix_lead_id").eq("campanha_id", campanha_id).in("bitrix_lead_id", bl);
         if (ex.error) throw ex.error;
         const jaTem = new Set((ex.data || []).map((x: any) => Number(x.bitrix_lead_id)));
+        // idx_leads_unique_phone_campanha: o MESMO telefone nao entra 2x na campanha (achado no teste de 25/10:
+        // leads [TREINO] com o fone do COO davam HTTP 500). Devolve telefone_ja_na_campanha em vez de estourar.
+        const fones = [...new Set(leadsIn.map((l: any) => String(l.telefone || "").replace(/\D/g, "")).filter((t: string) => t.length >= 10))];
+        const foneTem = new Set<string>();
+        if (fones.length) {
+          const fx = await admin.from("leads").select("telefone").eq("campanha_id", campanha_id).in("telefone", fones);
+          if (fx.error) throw fx.error;
+          for (const x of fx.data || []) foneTem.add(String(x.telefone));
+        }
         const resultado: any[] = [];
         const rows: any[] = [];
         for (const l of leadsIn) {
@@ -383,6 +392,8 @@ Deno.serve(async (req) => {
           if (!blid) { resultado.push({ bitrix_lead_id: l.bitrix_lead_id, status: "erro", motivo: "sem bitrix_lead_id" }); continue; }
           if (jaTem.has(blid)) { resultado.push({ bitrix_lead_id: blid, status: "ja_existia" }); continue; }
           if (tel.length < 10) { resultado.push({ bitrix_lead_id: blid, status: "sem_telefone" }); continue; }
+          if (foneTem.has(tel)) { resultado.push({ bitrix_lead_id: blid, status: "telefone_ja_na_campanha" }); continue; }
+          foneTem.add(tel); // 2 leads com o mesmo fone no mesmo lote: so o 1o entra
           const corr = corrMap[parseInt(l.corretor_bitrix_id) || 0];
           const n = normalizarTelefone(tel);
           rows.push({
@@ -402,9 +413,19 @@ Deno.serve(async (req) => {
           resultado.push({ bitrix_lead_id: blid, status: corr ? "criado" : "criado_sem_corretor" });
         }
         if (rows.length) {
+          let inseridos: any[] = [];
           const ins = await admin.from("leads").insert(rows).select("id, bitrix_lead_id, corretor_id, gestor_id");
-          if (ins.error) throw ins.error;
-          const asg = (ins.data || []).filter((x: any) => x.corretor_id).map((x: any) => ({
+          if (ins.error) {
+            // lote caiu (corrida com outro envio?): tenta 1 a 1 pra nao perder o lote inteiro por 1 lead
+            for (const r of rows) {
+              const um = await admin.from("leads").insert(r).select("id, bitrix_lead_id, corretor_id, gestor_id").single();
+              if (um.error) {
+                const i = resultado.findIndex((x: any) => x.bitrix_lead_id === r.bitrix_lead_id);
+                if (i >= 0) resultado[i] = { bitrix_lead_id: r.bitrix_lead_id, status: "erro", motivo: um.error.message.slice(0, 120) };
+              } else inseridos.push(um.data);
+            }
+          } else inseridos = ins.data || [];
+          const asg = inseridos.filter((x: any) => x.corretor_id).map((x: any) => ({
             lead_id: x.id, corretor_id: x.corretor_id, gestor_id: x.gestor_id, campanha_id, status_distribuicao: "pendente",
           }));
           if (asg.length) {
