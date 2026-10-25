@@ -1,5 +1,6 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
+import { normalizarTelefone } from "../_shared/phoneNormalization.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -327,6 +328,93 @@ Deno.serve(async (req) => {
           created,
           reativado,
         });
+      }
+      case "campanhas-list": {
+        // Seletor de campanha do Funil Vivo (25/10/2026)
+        const { data, error } = await admin.from("campanhas")
+          .select("id, nome, gestor_id, total_leads, created_at")
+          .order("created_at", { ascending: false }).limit(200);
+        if (error) throw error;
+        return json({ campanhas: data });
+      }
+      case "oferta-entrada": {
+        // Funil Vivo -> Oferta ativa (25/10/2026). Acha/cria a campanha, insere os leads com bitrix_lead_id
+        // (unico por campanha: 2a passada devolve ja_existia), vincula o corretor pelo bitrix_id e cria o assignment.
+        const leadsIn: any[] = Array.isArray(body.leads) ? body.leads.slice(0, 500) : [];
+        if (!leadsIn.length) return json({ error: "leads required" }, 400);
+        let gestor_id: string | null = null;
+        const gb = parseInt(body.gestor_bitrix_id) || 0;
+        if (gb) {
+          const g = await admin.from("profiles").select("id").eq("bitrix_id", gb).maybeSingle();
+          gestor_id = g.data?.id ?? null;
+        }
+        let campanha_id = String(body.campanha_id || "");
+        let campanha_nome = String(body.campanha_nome || "").trim();
+        if (campanha_id) {
+          const c = await admin.from("campanhas").select("id, nome").eq("id", campanha_id).maybeSingle();
+          if (!c.data) return json({ error: "campanha nao encontrada" }, 404);
+          campanha_nome = c.data.nome;
+        } else {
+          if (!campanha_nome) return json({ error: "campanha_id or campanha_nome required" }, 400);
+          const c = await admin.from("campanhas").select("id").ilike("nome", campanha_nome).limit(1).maybeSingle();
+          if (c.data) campanha_id = c.data.id;
+          else {
+            const n = await admin.from("campanhas").insert({ nome: campanha_nome, gestor_id }).select("id").single();
+            if (n.error) throw n.error;
+            campanha_id = n.data.id;
+          }
+        }
+        const bxIds = [...new Set(leadsIn.map((l: any) => parseInt(l.corretor_bitrix_id) || 0).filter(Boolean))];
+        const corrMap: Record<number, { id: string; gestor_id: string | null }> = {};
+        if (bxIds.length) {
+          const r = await admin.from("profiles").select("id, bitrix_id, gestor_id").in("bitrix_id", bxIds);
+          if (r.error) throw r.error;
+          for (const p of r.data || []) corrMap[Number(p.bitrix_id)] = { id: p.id, gestor_id: p.gestor_id };
+        }
+        const bl = leadsIn.map((l: any) => parseInt(l.bitrix_lead_id) || 0).filter(Boolean);
+        const ex = await admin.from("leads").select("bitrix_lead_id").eq("campanha_id", campanha_id).in("bitrix_lead_id", bl);
+        if (ex.error) throw ex.error;
+        const jaTem = new Set((ex.data || []).map((x: any) => Number(x.bitrix_lead_id)));
+        const resultado: any[] = [];
+        const rows: any[] = [];
+        for (const l of leadsIn) {
+          const blid = parseInt(l.bitrix_lead_id) || 0;
+          const tel = String(l.telefone || "").replace(/\D/g, "");
+          if (!blid) { resultado.push({ bitrix_lead_id: l.bitrix_lead_id, status: "erro", motivo: "sem bitrix_lead_id" }); continue; }
+          if (jaTem.has(blid)) { resultado.push({ bitrix_lead_id: blid, status: "ja_existia" }); continue; }
+          if (tel.length < 10) { resultado.push({ bitrix_lead_id: blid, status: "sem_telefone" }); continue; }
+          const corr = corrMap[parseInt(l.corretor_bitrix_id) || 0];
+          const n = normalizarTelefone(tel);
+          rows.push({
+            nome: String(l.nome || "").trim() || `Lead ${blid}`,
+            nome_original: l.nome || null,
+            telefone: tel,
+            telefone_raw: String(l.telefone || ""),
+            ddi: n.ddi, ddd: n.ddd, numero_core: n.numero_core, is_mobile: n.is_mobile, e164: n.e164,
+            display_local: n.display_local, whatsapp_url: n.whatsapp_url,
+            validacao: n.validacao, motivo_validacao: n.motivo_validacao,
+            campanha_id,
+            corretor_id: corr?.id ?? null,
+            gestor_id: corr?.gestor_id ?? gestor_id,
+            status: "pendente",
+            bitrix_lead_id: blid,
+          });
+          resultado.push({ bitrix_lead_id: blid, status: corr ? "criado" : "criado_sem_corretor" });
+        }
+        if (rows.length) {
+          const ins = await admin.from("leads").insert(rows).select("id, bitrix_lead_id, corretor_id, gestor_id");
+          if (ins.error) throw ins.error;
+          const asg = (ins.data || []).filter((x: any) => x.corretor_id).map((x: any) => ({
+            lead_id: x.id, corretor_id: x.corretor_id, gestor_id: x.gestor_id, campanha_id, status_distribuicao: "pendente",
+          }));
+          if (asg.length) {
+            const a = await admin.from("assignments").insert(asg);
+            if (a.error) throw a.error;
+          }
+          const cnt = await admin.from("leads").select("id", { count: "exact", head: true }).eq("campanha_id", campanha_id);
+          await admin.from("campanhas").update({ total_leads: cnt.count ?? 0 }).eq("id", campanha_id);
+        }
+        return json({ campanha_id, campanha_nome, resultado });
       }
       // ===== Plantão =====
       case "plantao-generate-copies": {
