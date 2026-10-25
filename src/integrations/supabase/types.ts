@@ -757,6 +757,8 @@ export type Database = {
         Row: {
           campanha_id: string | null
           bitrix_lead_id: number | null
+          bitrix_retorno_em: string | null
+          bitrix_retorno_tipo: string | null
           corretor_id: string | null
           created_at: string
           data_atendimento: string | null
@@ -786,6 +788,8 @@ export type Database = {
         Insert: {
           campanha_id?: string | null
           bitrix_lead_id?: number | null
+          bitrix_retorno_em?: string | null
+          bitrix_retorno_tipo?: string | null
           corretor_id?: string | null
           created_at?: string
           data_atendimento?: string | null
@@ -815,6 +819,8 @@ export type Database = {
         Update: {
           campanha_id?: string | null
           bitrix_lead_id?: number | null
+          bitrix_retorno_em?: string | null
+          bitrix_retorno_tipo?: string | null
           corretor_id?: string | null
           created_at?: string
           data_atendimento?: string | null

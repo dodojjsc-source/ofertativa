@@ -437,6 +437,43 @@ Deno.serve(async (req) => {
         }
         return json({ campanha_id, campanha_nome, resultado });
       }
+      case "oferta-retorno-pendentes": {
+        // Robo ofertativa_retorno.py (VPS): leads vindos do Funil Vivo que ja tem resultado e ainda nao voltaram
+        // pro Bitrix: feedback dado, nao atendido (3 tentativas) ou parados ha mais de `dias` sem contato.
+        const dias = Math.max(parseInt(body.dias || "30") || 30, 1);
+        const corte = new Date(Date.now() - dias * 86400000).toISOString();
+        const sel = "id, bitrix_lead_id, nome, telefone, status, feedback, observacao, data_atendimento, created_at, tentativas_contato, " +
+          "campanhas:campanha_id (nome), corretor:corretor_id (name, bitrix_id)";
+        const base = () => admin.from("leads").select(sel).not("bitrix_lead_id", "is", null).is("bitrix_retorno_em", null);
+        const [a, b, c] = await Promise.all([
+          base().not("feedback", "is", null).limit(500),
+          base().eq("status", "nao_atendido").limit(500),
+          base().lt("created_at", corte).limit(500),
+        ]);
+        for (const r of [a, b, c]) if (r.error) throw r.error;
+        const vistos = new Set<string>();
+        const itens: any[] = [];
+        for (const [lista, motivo] of [[a.data, "feedback"], [b.data, "nao_atendido"], [c.data, "encerrado"]] as any[]) {
+          for (const l of lista || []) {
+            if (vistos.has(l.id)) continue;
+            vistos.add(l.id);
+            itens.push({ ...l, motivo });
+          }
+        }
+        return json({ dias, itens });
+      }
+      case "oferta-retorno-marcar": {
+        const itens: any[] = Array.isArray(body.itens) ? body.itens : [];
+        let n = 0;
+        for (const it of itens) {
+          if (!it.id) continue;
+          const u = await admin.from("leads").update({ bitrix_retorno_em: new Date().toISOString(), bitrix_retorno_tipo: String(it.tipo || "").slice(0, 60) })
+            .eq("id", it.id).is("bitrix_retorno_em", null);
+          if (u.error) throw u.error;
+          n++;
+        }
+        return json({ marcados: n });
+      }
       // ===== Plantão =====
       case "plantao-generate-copies": {
         const nome_oferta = String(body.nome_oferta || "").trim();
