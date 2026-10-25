@@ -232,17 +232,19 @@ Deno.serve(async (req) => {
       case "profiles-list": {
         const { data, error } = await admin
           .from("profiles")
-          .select("id, email, name, gestor_id, status, telefone, meta_diaria");
+          .select("id, email, name, gestor_id, status, telefone, meta_diaria, bitrix_id");
         if (error) throw error;
         return json({ profiles: data });
       }
       case "profile-update": {
-        const { id, gestor_id, status, name } = body;
+        const { id, gestor_id, status, name, bitrix_id, telefone } = body;
         if (!id) return json({ error: "id required" }, 400);
         const patch: Record<string, unknown> = {};
         if (gestor_id !== undefined) patch.gestor_id = gestor_id;
         if (status !== undefined) patch.status = status;
         if (name !== undefined) patch.name = name;
+        if (bitrix_id !== undefined) patch.bitrix_id = bitrix_id;
+        if (telefone !== undefined) patch.telefone = telefone;
         if (!Object.keys(patch).length) return json({ error: "nothing to update" }, 400);
         const { data, error } = await admin
           .from("profiles")
@@ -251,6 +253,80 @@ Deno.serve(async (req) => {
           .select();
         if (error) throw error;
         return json({ profile: data?.[0] ?? null });
+      }
+      case "sso-link": {
+        // Entrada unica pelo Portal do Corretor (25/10/2026).
+        // Acha o perfil pelo bitrix_id (o mesmo do Hub); se nao tiver, pelo e-mail (e grava o bitrix_id);
+        // se nao existir e create=true, cria a conta (corretor, ou gestor quando cargo=Gerente).
+        // Devolve o token_hash do link magico; o app troca por sessao em /entrar.
+        const bitrix_id = parseInt(body.bitrix_id) || 0;
+        const email = String(body.email || "").trim().toLowerCase();
+        if (!bitrix_id && !email) return json({ error: "bitrix_id or email required" }, 400);
+        const sel = "id, email, bitrix_id, status, gestor_id";
+        let prof: any = null;
+        if (bitrix_id) {
+          const r = await admin.from("profiles").select(sel).eq("bitrix_id", bitrix_id).maybeSingle();
+          if (r.error) throw r.error;
+          prof = r.data;
+        }
+        if (!prof && email) {
+          const r = await admin.from("profiles").select(sel).ilike("email", email).maybeSingle();
+          if (r.error) throw r.error;
+          prof = r.data;
+          if (prof && bitrix_id && !prof.bitrix_id) {
+            const u = await admin.from("profiles").update({ bitrix_id }).eq("id", prof.id);
+            if (u.error) throw u.error;
+          }
+        }
+        // gestor da equipe (Hub) -> perfil do gestor aqui
+        let gestor_id: string | null = null;
+        const gb = parseInt(body.gestor_bitrix_id) || 0;
+        if (gb) {
+          const g = await admin.from("profiles").select("id").eq("bitrix_id", gb).maybeSingle();
+          gestor_id = g.data?.id ?? null;
+        }
+        let created = false;
+        let reativado = false;
+        if (!prof) {
+          if (!body.create) return json({ error: "no_profile" }, 404);
+          if (!email) return json({ error: "email required to create" }, 400);
+          const senha = crypto.randomUUID() + "Aa1!";
+          const { data: nu, error: ce } = await admin.auth.admin.createUser({
+            email,
+            password: senha,
+            email_confirm: true,
+            user_metadata: { name: body.name || email, role: "corretor", gestor_id, telefone: body.telefone || null },
+          });
+          if (ce) throw ce;
+          const uid = nu.user.id;
+          const up = await admin.from("profiles")
+            .update({ bitrix_id: bitrix_id || null, gestor_id, telefone: body.telefone || null })
+            .eq("id", uid);
+          if (up.error) throw up.error;
+          if (body.cargo === "Gerente") {
+            // o guard do handle_new_user nao deixa nascer gestor: promove depois (mesma receita de 25/08)
+            await admin.from("user_roles").update({ role: "gestor" }).eq("user_id", uid);
+          }
+          prof = { id: uid, email, bitrix_id, status: "ativo", gestor_id };
+          created = true;
+        } else if (prof.status !== "ativo") {
+          // Hub/Bitrix e a fonte do quadro: quem esta ativo la volta a ativo aqui ao entrar
+          const u = await admin.from("profiles").update({ status: "ativo" }).eq("id", prof.id);
+          if (u.error) throw u.error;
+          reativado = true;
+        }
+        if (prof.id && gestor_id && !prof.gestor_id && !created) {
+          await admin.from("profiles").update({ gestor_id }).eq("id", prof.id);
+        }
+        const { data: lk, error: le } = await admin.auth.admin.generateLink({ type: "magiclink", email: prof.email });
+        if (le) throw le;
+        return json({
+          token_hash: lk.properties?.hashed_token ?? null,
+          email: prof.email,
+          profile_id: prof.id,
+          created,
+          reativado,
+        });
       }
       // ===== Plantão =====
       case "plantao-generate-copies": {

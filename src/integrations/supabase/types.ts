@@ -756,6 +756,7 @@ export type Database = {
       leads: {
         Row: {
           campanha_id: string | null
+          bitrix_lead_id: number | null
           corretor_id: string | null
           created_at: string
           data_atendimento: string | null
@@ -784,6 +785,7 @@ export type Database = {
         }
         Insert: {
           campanha_id?: string | null
+          bitrix_lead_id?: number | null
           corretor_id?: string | null
           created_at?: string
           data_atendimento?: string | null
@@ -812,6 +814,7 @@ export type Database = {
         }
         Update: {
           campanha_id?: string | null
+          bitrix_lead_id?: number | null
           corretor_id?: string | null
           created_at?: string
           data_atendimento?: string | null
@@ -1028,6 +1031,7 @@ export type Database = {
           name: string
           status: Database["public"]["Enums"]["user_status"]
           telefone: string | null
+          bitrix_id: number | null
           updated_at: string
         }
         Insert: {
@@ -1039,6 +1043,7 @@ export type Database = {
           name: string
           status?: Database["public"]["Enums"]["user_status"]
           telefone?: string | null
+          bitrix_id?: number | null
           updated_at?: string
         }
         Update: {
@@ -1050,6 +1055,7 @@ export type Database = {
           name?: string
           status?: Database["public"]["Enums"]["user_status"]
           telefone?: string | null
+          bitrix_id?: number | null
           updated_at?: string
         }
         Relationships: [

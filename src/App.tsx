@@ -15,6 +15,7 @@ import { PWAPrompt } from "@/components/PWAPrompt";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
+import Entrar from "./pages/Entrar";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import Producao from "./pages/Producao";
@@ -59,6 +60,7 @@ const App = () => (
                     <Routes>
                       <Route path="/" element={<Index />} />
                       <Route path="/auth" element={<Auth />} />
+                      <Route path="/entrar" element={<Entrar />} />
                       <Route path="/login" element={<Login />} />
                       <Route path="/accept-invite" element={<AcceptInvite />} />
                       <Route path="/reset-password" element={<ResetPassword />} />
